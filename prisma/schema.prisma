@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+}
+
+model Idea {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                 String
+  slug                  String    @unique
+  summary               String
+  detailedAnalysis      String?   @map("detailed_analysis")
+  category              String
+  subcategory           String?
+  peptideTopics         String[]  @map("peptide_topics")
+
+  // Status & Workflow
+  status                String    @default("pending")
+  priorityScore         Float     @default(0) @map("priority_score")
+  confidenceScore       Float     @default(0) @map("confidence_score")
+
+  // Trend & Market Data
+  googleTrendsScore     Int?      @map("google_trends_score")
+  googleTrendsDirection String?   @map("google_trends_direction")
+  redditMentionCount    Int       @default(0) @map("reddit_mention_count")
+  redditQuestionCount   Int       @default(0) @map("reddit_question_count")
+  youtubeVideoCount     Int       @default(0) @map("youtube_video_count")
+  youtubeAvgViews       Int       @default(0) @map("youtube_avg_views")
+  forumMentionCount     Int       @default(0) @map("forum_mention_count")
+  etsyCompetitorCount   Int       @default(0) @map("etsy_competitor_count")
+  etsyAvgPrice          Decimal?  @map("etsy_avg_price") @db.Decimal(10, 2)
+  etsyAvgReviews        Int?      @map("etsy_avg_reviews")
+  whopCompetitorCount   Int       @default(0) @map("whop_competitor_count")
+  searchVolumeMonthly   Int?      @map("search_volume_monthly")
+
+  // Competitive Intelligence
+  existingProducts      Json      @default("[]") @map("existing_products")
+  competitorAnalysis    String?   @map("competitor_analysis")
+  differentiationNotes  String?   @map("differentiation_notes")
+
+  // Revenue Estimation
+  estimatedPriceRange   String?   @map("estimated_price_range")
+  estimatedMonthlyRev   String?   @map("estimated_monthly_revenue")
+  effortToBuild         String?   @map("effort_to_build")
+  timeToBuild           String?   @map("time_to_build")
+
+  // Evidence & Sources
+  sourceLinks           Json      @default("[]") @map("source_links")
+  discoverySource       String?   @map("discovery_source")
+
+  // Operator Feedback
+  operatorNotes         String[]  @map("operator_notes")
+  declineReason         String?   @map("decline_reason")
+  approvalNotes         String?   @map("approval_notes")
+
+  // Timestamps
+  discoveredAt          DateTime  @default(now()) @map("discovered_at")
+  lastDataRefresh       DateTime? @map("last_data_refresh")
+  statusChangedAt       DateTime? @map("status_changed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  tags                  IdeaTag[]
+  conversations         Conversation[]
+
+  @@map("ideas")
+}
+
+model BrainMemory {
+  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  memoryType     String                  @map("memory_type")
+  content        String
+  embedding      Unsupported("vector(1536)")?
+  source         String?
+  relatedIdeaIds String[]                @map("related_idea_ids") @db.Uuid
+  importance     Float                   @default(0.5)
+  active         Boolean                 @default(true)
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@map("brain_memory")
+}
+
+model Conversation {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String?
+  relatedIdeaId String?   @map("related_idea_id") @db.Uuid
+  relatedIdea   Idea?     @relation(fields: [relatedIdeaId], references: [id])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@map("messages")
+}
+
+model ScrapeLog {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source         String
+  query          String?
+  resultsCount   Int       @default(0) @map("results_count")
+  ideasGenerated Int       @default(0) @map("ideas_generated")
+  status         String    @default("completed")
+  errorMessage   String?   @map("error_message")
+  startedAt      DateTime  @default(now()) @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+
+  @@map("scrape_logs")
+}
+
+model MonitoredSource {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceType     String    @map("source_type")
+  sourceUrl      String?   @map("source_url")
+  sourceName     String    @map("source_name")
+  checkFreqHours Int       @default(4) @map("check_frequency_hours")
+  lastCheckedAt  DateTime? @map("last_checked_at")
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("monitored_sources")
+}
+
+model Tag {
+  id    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name  String    @unique
+  color String    @default("#6366f1")
+  ideas IdeaTag[]
+
+  @@map("tags")
+}
+
+model IdeaTag {
+  ideaId String @map("idea_id") @db.Uuid
+  tagId  String @map("tag_id") @db.Uuid
+  idea   Idea   @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ideaId, tagId])
+  @@map("idea_tags")
+}

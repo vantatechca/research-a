@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: peptidebrain-db
+    environment:
+      POSTGRES_DB: peptidebrain
+      POSTGRES_USER: peptidebrain
+      POSTGRES_PASSWORD: peptidebrain_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U peptidebrain"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: peptidebrain-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: peptidebrain-worker
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://peptidebrain:peptidebrain_dev@db:5432/peptidebrain
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: peptidebrain-beat
+    command: celery -A celery_app beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://peptidebrain:peptidebrain_dev@db:5432/peptidebrain
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: peptidebrain-api
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://peptidebrain:peptidebrain_dev@db:5432/peptidebrain
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
