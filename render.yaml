@@ -1,0 +1,111 @@
+# render.yaml — peptide-brain workers Blueprint
+#
+# Deploys 4 resources:
+#   1. peptidebrain-api          → FastAPI (/trigger, /status, /health)
+#   2. peptidebrain-worker       → Celery worker (runs scrapers)
+#   3. peptidebrain-beat         → Celery beat (scheduler, MUST be 1 instance)
+#   4. peptidebrain-redis        → Key Value (Valkey) broker + result backend
+#
+# ─────────────────────────────────────────────────────────────
+# BEFORE YOU DEPLOY — edit these:
+#   • repo:       point to the repo containing api.py / celery_app.py / Dockerfile
+#   • rootDir:    path inside the repo to the folder with the Dockerfile
+#   • region:     match whatever region peptidebrain.onrender.com already runs in
+#
+# AFTER FIRST DEPLOY:
+#   • Render will prompt you for every `sync: false` env var in the dashboard.
+#     Paste your Neon DATABASE_URL and all API keys there — not in this file.
+#   • Add your frontend URL to CORS in api.py (currently only allows localhost:3000).
+# ─────────────────────────────────────────────────────────────
+
+envVarGroups:
+  - name: peptidebrain-shared
+    envVars:
+      # Database — paste Neon connection string in dashboard
+      - key: DATABASE_URL
+        sync: false
+
+      # AI
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: deepseek/deepseek-chat
+      - key: EMBEDDINGS_API_KEY
+        sync: false
+      - key: EMBEDDINGS_API_URL
+        value: https://api.openai.com/v1
+      - key: EMBEDDINGS_MODEL
+        value: text-embedding-3-small
+
+      # External APIs
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: SERP_API_KEY
+        sync: false
+      - key: SERP_API_PROVIDER
+        value: serper
+      - key: ETSY_API_KEY
+        sync: false
+
+services:
+  # ─── 1. FastAPI — the trigger/status endpoint your Next.js UI calls ───
+  - type: web
+    name: peptidebrain-api
+    runtime: docker
+    repo: https://github.com/vantatechca/research-a    # ← change if workers live elsewhere
+    rootDir: workers                                    # ← change if Dockerfile is at repo root
+    region: oregon                                      # ← MUST match existing services + Neon region
+    plan: starter                                       # $7/mo. Free tier sleeps after 15min, unusable for this.
+    dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: peptidebrain-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: peptidebrain-redis
+          property: connectionString
+
+  # ─── 2. Celery worker — runs the actual scrape tasks ───
+  - type: worker
+    name: peptidebrain-worker
+    runtime: docker
+    repo: https://github.com/vantatechca/research-a
+    rootDir: workers
+    region: oregon
+    plan: starter                                       # bump to standard if queue backs up
+    # concurrency=2 keeps RAM safe on starter (512MB). Raise if scrapers are mostly I/O-bound.
+    dockerCommand: celery -A celery_app worker --loglevel=info --concurrency=2
+    envVars:
+      - fromGroup: peptidebrain-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: peptidebrain-redis
+          property: connectionString
+
+  # ─── 3. Celery beat — the scheduler. DO NOT SCALE. ───
+  - type: worker
+    name: peptidebrain-beat
+    runtime: docker
+    repo: https://github.com/vantatechca/research-a
+    rootDir: workers
+    region: oregon
+    plan: starter
+    numInstances: 1    # ⚠ Two beat schedulers = every scheduled task fires twice. Keep at 1 forever.
+    dockerCommand: celery -A celery_app beat --loglevel=info
+    envVars:
+      - fromGroup: peptidebrain-shared
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: peptidebrain-redis
+          property: connectionString
+
+  # ─── 4. Key Value (Valkey / Redis-compatible) — Celery broker + result backend ───
+  - type: keyvalue
+    name: peptidebrain-redis
+    region: oregon
+    plan: starter              # $10/mo, persists to disk. Free tier loses data on restart.
+    maxmemoryPolicy: noeviction  # Critical: prevents Redis from dropping queued tasks under pressure.
+    ipAllowList: []            # Empty list = internal access only. Services in same region connect privately.
