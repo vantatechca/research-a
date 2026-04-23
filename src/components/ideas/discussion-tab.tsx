@@ -167,6 +167,9 @@ export function DiscussionTab({ ideaId, ideaTitle }: DiscussionTabProps) {
           <div className="flex items-end gap-2">
             <Textarea
               ref={textareaRef}
+              id="idea-discussion-input"
+              name="discussion"
+              autoComplete="off"
               placeholder={`Ask about "${ideaTitle}"...`}
               value={input}
               onChange={(e) => setInput(e.target.value)}

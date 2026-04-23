@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { IdeaCard } from "@/components/dashboard/idea-card";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,10 @@ export default function IdeasPage() {
   const [sortField, setSortField] = useState<SortField>("priority_score");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
+  // Counts per status (always shown in tabs)
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [allTotal, setAllTotal] = useState(0);
+
   // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -51,6 +55,29 @@ export default function IdeasPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Fetch counts for ALL statuses (ignores current tab filter)
+  const fetchCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/ideas?limit=1000`);
+      if (res.ok) {
+        const data = await res.json();
+        const counts: Record<string, number> = {};
+        for (const idea of data.ideas as IdeaCardType[]) {
+          counts[idea.status] = (counts[idea.status] || 0) + 1;
+        }
+        setStatusCounts(counts);
+        setAllTotal(data.total);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Fetch counts on mount
+  useEffect(() => {
+    fetchCounts();
+  }, [fetchCounts]);
 
   const fetchIdeas = useCallback(async () => {
     setLoading(true);
@@ -85,6 +112,8 @@ export default function IdeasPage() {
         idea.id === id ? { ...idea, status: newStatus } : idea
       )
     );
+    // Refresh counts since an idea changed status
+    fetchCounts();
   }
 
   function toggleSortOrder() {
@@ -99,16 +128,6 @@ export default function IdeasPage() {
       setSortOrder("desc");
     }
   }
-
-  // Counts per tab (derived from current ideas if tab is "all")
-  const tabCounts = useMemo(() => {
-    if (activeTab !== "all") return null;
-    const counts: Record<string, number> = {};
-    for (const idea of ideas) {
-      counts[idea.status] = (counts[idea.status] || 0) + 1;
-    }
-    return counts;
-  }, [ideas, activeTab]);
 
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
@@ -128,8 +147,8 @@ export default function IdeasPage() {
             const isActive = activeTab === tab.value;
             const count =
               tab.value === "all"
-                ? total
-                : tabCounts?.[tab.value] ?? null;
+                ? allTotal
+                : statusCounts[tab.value] ?? 0;
 
             return (
               <button
@@ -143,18 +162,16 @@ export default function IdeasPage() {
                 )}
               >
                 {tab.label}
-                {count !== null && activeTab === "all" && (
-                  <span
-                    className={cn(
-                      "text-[10px] px-1.5 py-0.5 rounded-full",
-                      isActive
-                        ? "bg-violet-200 text-violet-800"
-                        : "bg-gray-200 text-gray-600"
-                    )}
-                  >
-                    {count}
-                  </span>
-                )}
+                <span
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full",
+                    isActive
+                      ? "bg-violet-200 text-violet-800"
+                      : "bg-gray-200 text-gray-600"
+                  )}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}

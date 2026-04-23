@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import {
   Card,
@@ -29,7 +29,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer,
   Cell,
 } from "recharts";
 
@@ -96,6 +95,20 @@ export default function TrendsPage() {
   const [data, setData] = useState<TrendsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        setChartSize({ width: Math.floor(width), height: Math.floor(height) });
+      }
+    });
+    observer.observe(chartContainerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     async function fetchTrends() {
@@ -403,9 +416,14 @@ export default function TrendsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+              <div
+                ref={chartContainerRef}
+                style={{ width: "100%", height: "300px" }}
+              >
+                {chartSize.width > 0 && chartSize.height > 0 ? (
                   <BarChart
+                    width={chartSize.width}
+                    height={chartSize.height}
                     data={chartData}
                     margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                   >
@@ -441,7 +459,7 @@ export default function TrendsPage() {
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                ) : null}
               </div>
 
               {/* Legend / Stats List */}

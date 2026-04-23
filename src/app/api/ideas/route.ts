@@ -27,11 +27,14 @@ export async function GET(req: NextRequest) {
     if (status) where.status = status;
     if (category) where.category = category;
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { summary: { contains: search, mode: "insensitive" } },
-      ];
-    }
+    where.OR = [
+      { title: { contains: search, mode: "insensitive" } },
+      { summary: { contains: search, mode: "insensitive" } },
+      { category: { contains: search, mode: "insensitive" } },
+      { subcategory: { contains: search, mode: "insensitive" } },
+      { peptideTopics: { has: search.toLowerCase() } },
+    ];
+  }
 
     const orderByField = sort === "priority_score" ? "priorityScore"
       : sort === "discovered_at" ? "discoveredAt"

@@ -216,6 +216,9 @@ function SourcesTab() {
                   Check Frequency (hours)
                 </label>
                 <Input
+                  id="new-source-freq"
+                  name="checkFreqHours"
+                  autoComplete="off"
                   type="number"
                   min={1}
                   max={168}
@@ -234,6 +237,9 @@ function SourcesTab() {
                 Source Name
               </label>
               <Input
+                id="new-source-name"
+                name="sourceName"
+                autoComplete="off"
                 placeholder="e.g. r/Peptides"
                 value={newSource.sourceName}
                 onChange={(e) =>
@@ -246,6 +252,10 @@ function SourcesTab() {
                 URL (optional)
               </label>
               <Input
+                id="new-source-url"
+                name="sourceUrl"
+                autoComplete="off"
+                type="url"
                 placeholder="https://..."
                 value={newSource.sourceUrl}
                 onChange={(e) =>
@@ -316,6 +326,9 @@ function SourcesTab() {
                     {editingId === source.id ? (
                       <div className="flex items-center gap-2">
                         <Input
+                          id={`source-freq-${source.id}`}
+                          name="checkFreqHours"
+                          autoComplete="off"
                           type="number"
                           min={1}
                           max={168}
@@ -531,6 +544,9 @@ function RulesTab() {
                 Content
               </label>
               <Textarea
+                id="new-rule-content"
+                name="ruleContent"
+                autoComplete="off"
                 placeholder="Enter the rule or memory content..."
                 value={newRule.content}
                 onChange={(e) =>
@@ -608,12 +624,15 @@ function RulesTab() {
                   Content
                 </label>
                 <Textarea
+                  id="edit-rule-content"
+                  name="editRuleContent"
+                  autoComplete="off"
                   value={editingRule.content}
-                  onChange={(e) =>
+                    onChange={(e) =>
                     setEditingRule({ ...editingRule, content: e.target.value })
-                  }
-                  rows={4}
-                />
+                   }
+                      rows={4}
+                      />
               </div>
             </div>
           )}
@@ -873,6 +892,9 @@ function ApiKeysTab() {
               </div>
               <div className="flex items-center gap-2">
                 <Input
+                  id={`api-key-${field.key}`}
+                  name={field.key}
+                  autoComplete="off"
                   type={visibleKeys[field.key] ? "text" : "password"}
                   placeholder={field.placeholder}
                   value={keys[field.key] ?? ""}

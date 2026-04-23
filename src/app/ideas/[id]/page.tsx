@@ -526,8 +526,10 @@ export default function IdeaDetailPage() {
           {/* Note input */}
           <div className="flex-1 flex items-center gap-2">
             <Input
+              id="idea-quick-note"
+              name="quickNote"
+              autoComplete="off"
               placeholder="Add a quick note..."
-              value={noteInput}
               onChange={(e) => setNoteInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -575,6 +577,9 @@ export default function IdeaDetailPage() {
           </DialogHeader>
           <div className="py-4">
             <Textarea
+              id="idea-approve-notes"
+              name="approveNotes"
+              autoComplete="off"
               placeholder="Why are you approving this idea? What makes it promising? (optional)"
               value={approveNotes}
               onChange={(e) => setApproveNotes(e.target.value)}
@@ -616,6 +621,9 @@ export default function IdeaDetailPage() {
           </DialogHeader>
           <div className="py-4">
             <Textarea
+              id="idea-decline-reason"
+              name="declineReason"
+              autoComplete="off"
               placeholder="Why are you declining this idea? (required)"
               value={declineReason}
               onChange={(e) => setDeclineReason(e.target.value)}

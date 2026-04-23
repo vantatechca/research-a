@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn, formatRelativeTime, truncate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -367,6 +366,9 @@ export default function BrainChatPage() {
           <div className="max-w-3xl mx-auto flex items-center gap-3">
             <Input
               ref={inputRef}
+              id="brain-chat-message"
+              name="message"
+              autoComplete="off"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
