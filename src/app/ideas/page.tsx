@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IdeaCard } from "@/components/dashboard/idea-card";
+import { AddIdeaDialog } from "@/components/dashboard/add-idea-dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -132,11 +133,12 @@ export default function IdeasPage() {
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">All Ideas</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Browse, filter, and manage your peptide product ideas
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">All Ideas</h1>
+          <p className="text-sm text-gray-500 mt-1">Browse, filter, and manage your peptide product ideas</p>
+        </div>
+        <AddIdeaDialog onCreated={() => window.location.reload()} />
       </div>
 
       {/* Toolbar: tabs + search + sort */}

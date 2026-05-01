@@ -13,7 +13,12 @@ import {
   Brain,
   Loader2,
   Sparkles,
+  Archive,
+  Trash2,
+  ArchiveRestore,
 } from "lucide-react";
+
+
 
 export default function BrainChatPage() {
   return (
@@ -27,6 +32,7 @@ function BrainChatInner() {
   // ?idea=<id> attaches a specific idea to this chat session for context.
   const searchParams = useSearchParams();
   const relatedIdeaId = searchParams.get("idea");
+  const [showArchived, setShowArchived] = useState(false);
 
   // When a related idea is in the URL, fetch its title/summary so we can
   // show a banner confirming which idea is attached to this chat.
@@ -79,15 +85,19 @@ function BrainChatInner() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // Load conversations on mount
+  // Load conversations on mount and whenever showArchived toggles
   useEffect(() => {
     fetchConversations();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showArchived]);
 
   async function fetchConversations() {
     try {
       setIsLoadingConversations(true);
-      const res = await fetch("/api/conversations");
+      const url = showArchived
+        ? "/api/conversations?archived=true"
+        : "/api/conversations";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to load conversations");
       const data = await res.json();
       setConversations(
@@ -104,7 +114,6 @@ function BrainChatInner() {
       setIsLoadingConversations(false);
     }
   }
-
   async function loadMessages(conversationId: string) {
     try {
       setIsLoadingMessages(true);
@@ -121,6 +130,44 @@ function BrainChatInner() {
       );
     } finally {
       setIsLoadingMessages(false);
+    }
+  }
+
+  async function handleArchive(id: string, archived: boolean) {
+    try {
+      const res = await fetch(`/api/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived }),
+      });
+      if (!res.ok) throw new Error("Failed to update conversation");
+      // If we just archived/unarchived the active conversation, clear it
+      if (id === activeConversationId) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+      fetchConversations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Permanently delete this conversation? This cannot be undone.")) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/conversations/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete conversation");
+      if (id === activeConversationId) {
+        setActiveConversationId(null);
+        setMessages([]);
+      }
+      fetchConversations();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
     }
   }
 
@@ -254,7 +301,7 @@ function BrainChatInner() {
     <div className="flex h-screen">
       {/* Conversations Sidebar */}
       <aside className="w-[250px] border-r border-gray-200 bg-white flex flex-col shrink-0">
-        <div className="p-3 border-b border-gray-100">
+        <div className="p-3 border-b border-gray-100 space-y-2">
           <Button
             variant="outline"
             className="w-full justify-start gap-2"
@@ -263,6 +310,27 @@ function BrainChatInner() {
             <Plus className="w-4 h-4" />
             New Chat
           </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowArchived((v) => !v);
+              setActiveConversationId(null);
+              setMessages([]);
+            }}
+            className="w-full text-xs text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors"
+          >
+            {showArchived ? (
+              <>
+                <MessageSquare className="h-3 w-3" />
+                Show active chats
+              </>
+            ) : (
+              <>
+                <Archive className="h-3 w-3" />
+                Show archived
+              </>
+            )}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -281,27 +349,71 @@ function BrainChatInner() {
           ) : (
             <div className="py-1">
               {conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  onClick={() => loadMessages(conv.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors border-l-2",
-                    activeConversationId === conv.id
-                      ? "border-l-violet-600 bg-violet-50/50"
-                      : "border-l-transparent"
-                  )}
-                >
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {conv.title || "Untitled Chat"}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {formatRelativeTime(conv.updatedAt)}
-                    {conv.messageCount
-                      ? ` \u00b7 ${conv.messageCount} messages`
-                      : ""}
-                  </p>
-                </button>
+                <div key={conv.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => loadMessages(conv.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2.5 pr-16 hover:bg-gray-50 transition-colors border-l-2",
+                      activeConversationId === conv.id
+                        ? "border-l-violet-600 bg-violet-50/50"
+                        : "border-l-transparent"
+                    )}
+                  >
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {conv.title || "Untitled Chat"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {formatRelativeTime(conv.updatedAt)}
+                      {conv.messageCount
+                        ? ` \u00b7 ${conv.messageCount} messages`
+                        : ""}
+                    </p>
+                  </button>
+                  <div className="absolute right-1 top-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {showArchived ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArchive(conv.id, false);
+                          }}
+                          className="p-1.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                          title="Restore from archive"
+                          aria-label="Restore from archive"
+                        >
+                          <ArchiveRestore className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(conv.id);
+                          }}
+                          className="p-1.5 rounded hover:bg-red-100 text-gray-500 hover:text-red-600"
+                          title="Delete permanently"
+                          aria-label="Delete permanently"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArchive(conv.id, true);
+                        }}
+                        className="p-1.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                        title="Archive"
+                        aria-label="Archive"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}

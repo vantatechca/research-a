@@ -44,6 +44,7 @@ import {
   Shield,
   TrendingUp,
   Target,
+  Trash2, 
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +85,7 @@ function formatStatus(status: string): string {
 export default function IdeaDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const id = (params?.id as string) ?? "";
   const ideaId = params.id;
 
   const [idea, setIdea] = useState<IdeaDetail | null>(null);
@@ -146,6 +148,25 @@ export default function IdeaDetailPage() {
   useEffect(() => {
     fetchIdea();
   }, [fetchIdea]);
+  async function handleDelete() {
+    if (
+      !confirm(
+        "Permanently delete this idea? This cannot be undone. Consider declining instead if you want the brain to learn from this."
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/ideas/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete idea");
+      toast.success("Idea deleted");
+      router.push("/ideas");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete idea");
+    }
+  }
 
   async function handleStatusChange(newStatus: string) {
     if (!idea || newStatus === idea.status) return;
@@ -282,8 +303,7 @@ export default function IdeaDetailPage() {
 
   return (
     <div className="pb-24">
-      {/* Header / Back nav */}
-      <div className="border-b border-gray-200 bg-white px-8 py-4">
+      <div className="border-b border-gray-200 bg-white px-8 py-4 flex items-center justify-between">
         <Link
           href="/ideas"
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
@@ -291,6 +311,15 @@ export default function IdeaDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           All Ideas
         </Link>
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors px-2 py-1 rounded hover:bg-red-50"
+          title="Delete this idea permanently"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
       </div>
 
       {/* Hero Section */}

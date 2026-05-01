@@ -70,8 +70,9 @@ export interface BrainMemoryItem {
 
 export interface ConversationItem {
   id: string;
-  title: string | null;
+  title: string;
   relatedIdeaId: string | null;
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
   messageCount?: number;

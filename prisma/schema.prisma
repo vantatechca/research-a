@@ -86,13 +86,14 @@ model BrainMemory {
 }
 
 model Conversation {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title         String?
-  relatedIdeaId String?   @map("related_idea_id") @db.Uuid
-  relatedIdea   Idea?     @relation(fields: [relatedIdeaId], references: [id])
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  messages      Message[]
+  id             String    @id @default(uuid()) @db.Uuid
+  title          String
+  relatedIdeaId  String?   @map("related_idea_id") @db.Uuid
+  archived       Boolean   @default(false)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  messages       Message[]
+  idea           Idea?     @relation(fields: [relatedIdeaId], references: [id], onDelete: SetNull)
 
   @@map("conversations")
 }

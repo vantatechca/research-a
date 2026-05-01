@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { AddIdeaDialog } from "@/components/dashboard/add-idea-dialog";
 import { StatCard } from "@/components/stat-card";
 import { IdeaCard } from "@/components/dashboard/idea-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -92,11 +93,12 @@ export default function DashboardPage() {
   return (
     <div className="p-6 lg:p-8 max-w-[1600px] mx-auto">
       {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Your peptide research command center
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Your peptide research command center</p>
+        </div>
+        <AddIdeaDialog onCreated={() => window.location.reload()} />
       </div>
 
       {/* Stats row */}
