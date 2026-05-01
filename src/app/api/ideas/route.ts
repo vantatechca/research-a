@@ -66,11 +66,69 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Whitelist of fields the client may set when creating an idea. Without
+// this, `data: body` would accept arbitrary keys including `id`, `createdAt`,
+// or another idea's `slug`, letting any caller forge fields.
+const CREATABLE_FIELDS = new Set<string>([
+  "title",
+  "slug",
+  "summary",
+  "detailedAnalysis",
+  "category",
+  "subcategory",
+  "peptideTopics",
+  "status",
+  "priorityScore",
+  "confidenceScore",
+  "googleTrendsScore",
+  "googleTrendsDirection",
+  "redditMentionCount",
+  "redditQuestionCount",
+  "youtubeVideoCount",
+  "youtubeAvgViews",
+  "forumMentionCount",
+  "etsyCompetitorCount",
+  "etsyAvgPrice",
+  "etsyAvgReviews",
+  "whopCompetitorCount",
+  "searchVolumeMonthly",
+  "existingProducts",
+  "competitorAnalysis",
+  "differentiationNotes",
+  "estimatedPriceRange",
+  "estimatedMonthlyRev",
+  "effortToBuild",
+  "timeToBuild",
+  "sourceLinks",
+  "discoverySource",
+  "operatorNotes",
+]);
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
+
+    const data: Record<string, unknown> = {};
+    for (const key of Object.keys(body)) {
+      if (CREATABLE_FIELDS.has(key)) data[key] = body[key];
+    }
+
+    if (
+      typeof data.title !== "string" ||
+      typeof data.slug !== "string" ||
+      typeof data.summary !== "string" ||
+      typeof data.category !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "title, slug, summary, and category are required" },
+        { status: 400 }
+      );
+    }
+
     const idea = await withTimeout(
-      prisma.idea.create({ data: body }),
+      prisma.idea.create({
+        data: data as Parameters<typeof prisma.idea.create>[0]["data"],
+      }),
       8000,
       "ideas.create"
     );

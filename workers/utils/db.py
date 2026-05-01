@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import contextmanager
 
 import psycopg2
@@ -23,7 +23,13 @@ def get_connection():
         conn.close()
 
 
-def insert_idea(idea_data: dict) -> str:
+def insert_idea(idea_data: dict) -> str | None:
+    """Insert an idea row.
+
+    Returns the new UUID on success, or None when the row was skipped due to a
+    slug conflict (ON CONFLICT DO NOTHING). Previously returned a fresh UUID
+    even on conflict, making callers think an insert happened when it hadn't.
+    """
     idea_id = str(uuid.uuid4())
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -93,7 +99,7 @@ def insert_idea(idea_data: dict) -> str:
                 ),
             )
             result = cur.fetchone()
-            return result[0] if result else idea_id
+            return result[0] if result else None
 
 
 def log_scrape(source: str, query: str | None, results_count: int, ideas_generated: int, status: str = "completed", error_message: str | None = None):
@@ -104,7 +110,7 @@ def log_scrape(source: str, query: str | None, results_count: int, ideas_generat
                 INSERT INTO scrape_logs (id, source, query, results_count, ideas_generated, status, error_message, completed_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (str(uuid.uuid4()), source, query, results_count, ideas_generated, status, error_message, datetime.utcnow() if status != "running" else None),
+                (str(uuid.uuid4()), source, query, results_count, ideas_generated, status, error_message, datetime.now(timezone.utc) if status != "running" else None),
             )
 
 

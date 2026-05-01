@@ -171,11 +171,23 @@ def process_raw_content(self, content: str, source: str, source_links: list[dict
 
     logger.info(f"Extracted {len(ideas)} ideas from {source}")
 
+    # Pull batch-level metrics out of metadata if scrapers supplied them.
+    # Every idea extracted from this batch shares these signals — coarse but
+    # better than the previous always-zero counts that broke priority scoring.
+    batch_metrics: dict = {}
+    if metadata and isinstance(metadata.get("metrics"), dict):
+        batch_metrics = metadata["metrics"]
+
     inserted = 0
     for idea in ideas:
         title = idea.get("title", "").strip()
         if not title:
             continue
+
+        # Layer batch metrics into the idea dict so scoring + persistence see
+        # them. setdefault preserves anything the AI explicitly returned.
+        for k, v in batch_metrics.items():
+            idea.setdefault(k, v)
 
         # Step 3: Deduplication by slug
         slug = slugify(title)
@@ -204,12 +216,23 @@ def process_raw_content(self, content: str, source: str, source_links: list[dict
             "differentiation_notes": idea.get("differentiation_angle"),
             "source_links": source_links or [],
             "discovery_source": source,
+            # Carry batch metrics into the row so dashboards can read them.
+            "reddit_mention_count": idea.get("reddit_mention_count", 0),
+            "reddit_question_count": idea.get("reddit_question_count", 0),
+            "youtube_video_count": idea.get("youtube_video_count", 0),
+            "youtube_avg_views": idea.get("youtube_avg_views", 0),
+            "forum_mention_count": idea.get("forum_mention_count", 0),
         }
 
         try:
             idea_id = insert_idea(idea_data)
+            if idea_id is None:
+                # Race: another worker inserted the same slug between dedup
+                # check and insert. Skip silently.
+                logger.debug(f"Idea '{title}' skipped at insert (slug conflict)")
+                continue
             inserted += 1
-            logger.info(f"Inserted idea: {title} (score: {priority_score})")
+            logger.info(f"Inserted idea: {title} (score: {priority_score}, id: {idea_id})")
         except Exception as e:
             logger.error(f"Failed to insert idea '{title}': {e}")
 

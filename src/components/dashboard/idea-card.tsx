@@ -153,7 +153,7 @@ export function IdeaCard({ idea, onStatusChange }: IdeaCardProps) {
           {trendDirection === "rising" && (
             <TrendingUp className="w-3 h-3 text-green-500" />
           )}
-          {trendDirection === "falling" && (
+          {trendDirection === "declining" && (
             <TrendingDown className="w-3 h-3 text-red-500" />
           )}
           {trendDirection === "stable" && (

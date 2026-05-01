@@ -60,11 +60,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // recentMessages comes back DESC (newest first); reverse a copy so we get
+  // chronological order without mutating the original twice.
+  const chronologicalMessages = [...recentMessages].reverse();
+
   const systemPrompt = buildBrainSystemPrompt({
     goldenRules: goldenRules.map((r) => r.content),
     generalRules: generalRules.map((r) => r.content),
     recentMemories: recentMemories.map((r) => `[${r.memoryType}] ${r.content}`),
-    conversationHistory: recentMessages.reverse().map((m) => `${m.role}: ${m.content.slice(0, 200)}`),
+    conversationHistory: chronologicalMessages.map((m) => `${m.role}: ${m.content.slice(0, 200)}`),
     stats: {
       total: stats[0],
       pending: stats[1],
@@ -75,8 +79,7 @@ export async function POST(req: NextRequest) {
     ideaContext,
   });
 
-  // Build ordered messages for Claude (already reversed above)
-  const orderedMessages = recentMessages.reverse();
+  const orderedMessages = chronologicalMessages;
 
   // Stream response from Claude
   let stream;

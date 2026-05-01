@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { cn, formatRelativeTime, truncate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,47 @@ import {
 } from "lucide-react";
 
 export default function BrainChatPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-gray-500">Loading…</div>}>
+      <BrainChatInner />
+    </Suspense>
+  );
+}
+
+function BrainChatInner() {
+  // ?idea=<id> attaches a specific idea to this chat session for context.
+  const searchParams = useSearchParams();
+  const relatedIdeaId = searchParams.get("idea");
+
+  // When a related idea is in the URL, fetch its title/summary so we can
+  // show a banner confirming which idea is attached to this chat.
+  const [relatedIdea, setRelatedIdea] = useState<{
+    id: string;
+    title: string;
+    summary: string;
+    category: string;
+    priorityScore: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!relatedIdeaId) {
+      setRelatedIdea(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/ideas/${relatedIdeaId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && data.id) setRelatedIdea(data);
+      })
+      .catch(() => {
+        // Silent fail — banner just won't render
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [relatedIdeaId]);
+
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
@@ -127,8 +169,9 @@ export default function BrainChatPage() {
         body: JSON.stringify({
           message: trimmed,
           conversationId: activeConversationId,
+          relatedIdeaId: relatedIdeaId || undefined,
         }),
-      });
+        });
 
       if (!res.ok) throw new Error("Failed to send message");
       if (!res.body) throw new Error("No response body");
@@ -137,39 +180,49 @@ export default function BrainChatPage() {
       const decoder = new TextDecoder();
       let accumulated = "";
       let newConversationId = activeConversationId;
+      // SSE events are delimited by "\n\n". A single chunk may end mid-event,
+      // so we keep a buffer and only consume complete events; leftover bytes
+      // carry over to the next read. Without this, partial JSON gets silently
+      // dropped on chunk boundaries.
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr) continue;
+        let sepIdx: number;
+        while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
 
-          try {
-            const parsed = JSON.parse(jsonStr);
+          for (const line of rawEvent.split("\n")) {
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
 
-            if (parsed.done && parsed.conversationId) {
-              newConversationId = parsed.conversationId;
-              continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+
+              if (parsed.done && parsed.conversationId) {
+                newConversationId = parsed.conversationId;
+                continue;
+              }
+
+              if (parsed.text) {
+                accumulated += parsed.text;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: accumulated }
+                      : m
+                  )
+                );
+              }
+            } catch {
+              // Skip malformed JSON chunks
             }
-
-            if (parsed.text) {
-              accumulated += parsed.text;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: accumulated }
-                    : m
-                )
-              );
-            }
-          } catch {
-            // Skip malformed JSON chunks
           }
         }
       }
@@ -258,18 +311,30 @@ export default function BrainChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Chat Header */}
-        <div className="h-14 border-b border-gray-200 bg-white flex items-center px-6 shrink-0">
-          <Brain className="w-5 h-5 text-violet-600 mr-2" />
-          <h2 className="text-sm font-semibold text-gray-900">
-            PeptideBrain Chat
-          </h2>
-          {isStreaming && (
-            <div className="ml-3 flex items-center gap-1.5 text-xs text-violet-600">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-              <span>Thinking...</span>
+        {relatedIdea && (
+          <div className="mx-4 mt-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3 dark:border-purple-900 dark:bg-purple-950/30">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-purple-700 dark:text-purple-300">
+                  <Sparkles className="h-3 w-3" />
+                  Discussing idea
+                </div>
+                <div className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {relatedIdea.title}
+                </div>
+                <div className="mt-0.5 line-clamp-2 text-xs text-gray-600 dark:text-gray-400">
+                  {relatedIdea.summary}
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-gray-500">
+                  <span className="rounded bg-purple-100 px-1.5 py-0.5 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                    {relatedIdea.category}
+                  </span>
+                  <span>Priority: {relatedIdea.priorityScore?.toFixed?.(1) ?? "—"}</span>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-4">

@@ -104,11 +104,29 @@ def scrape_youtube(self):
 
     source_links = [{"url": v["url"], "title": v["title"], "sourceType": "youtube"} for v in unique_videos[:30]]
 
+    source_links = [{"url": v["url"], "title": v["title"], "sourceType": "youtube"} for v in unique_videos[:30]]
+
+    # Pass aggregate batch metrics so the pipeline has something to attach to
+    # ideas extracted from this batch. See note in reddit_scraper.
+    batch_videos = unique_videos[:30]
+    youtube_video_count = len(batch_videos)
+    youtube_avg_views = (
+        sum(v.get("views", 0) for v in batch_videos) // youtube_video_count
+        if youtube_video_count > 0
+        else 0
+    )
+
     process_raw_content.delay(
         content=batch_text,
         source="youtube",
         source_links=source_links,
-        metadata={"total_videos": len(unique_videos)},
+        metadata={
+            "total_videos": len(unique_videos),
+            "metrics": {
+                "youtube_video_count": youtube_video_count,
+                "youtube_avg_views": youtube_avg_views,
+            },
+        },
     )
 
     log_scrape("youtube", None, len(unique_videos), 1, "completed")

@@ -89,11 +89,26 @@ def scrape_reddit(self):
 
         source_links = [{"url": p["permalink"], "title": p["title"], "sourceType": "reddit"} for p in batch]
 
+        source_links = [{"url": p["permalink"], "title": p["title"], "sourceType": "reddit"} for p in batch]
+
+        # Aggregate per-batch signals so the pipeline can attach them to each
+        # idea it extracts. Coarse approximation — every idea from this batch
+        # shares the same batch-level stats — but better than always-zero.
+        batch_reddit_mentions = sum(1 + p.get("num_comments", 0) for p in batch)
+        batch_question_count = sum(1 for p in batch if p.get("is_question"))
+
         count = process_raw_content.delay(
             content=batch_text,
             source="reddit",
             source_links=source_links,
-            metadata={"subreddits": list(set(p["subreddit"] for p in batch))},
+            metadata={
+                "subreddits": list(set(p["subreddit"] for p in batch)),
+                "metrics": {
+                    "reddit_mention_count": batch_reddit_mentions,
+                    "reddit_question_count": batch_question_count,
+                    "forum_mention_count": len(batch),
+                },
+            },
         )
         ideas_generated += 1  # Track batches sent
 
