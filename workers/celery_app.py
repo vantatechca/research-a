@@ -50,4 +50,14 @@ app.conf.beat_schedule = {
     },
 }
 
-app.autodiscover_tasks(["tasks"])
+from tasks import (
+       reddit_scraper,
+       google_trends,
+       youtube_scraper,
+       etsy_scraper,
+       whop_scraper,
+       bhw_scraper,
+       rss_aggregator,
+       web_researcher,
+       idea_pipeline,
+   )
