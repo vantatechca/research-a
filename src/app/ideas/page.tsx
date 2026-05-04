@@ -42,7 +42,7 @@ export default function IdeasPage() {
   const [activeTab, setActiveTab] = useState<StatusTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [sortField, setSortField] = useState<SortField>("priority_score");
+  const [sortField, setSortField] = useState<SortField>("discovered_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   // Counts per status (always shown in tabs)
