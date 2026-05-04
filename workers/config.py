@@ -74,3 +74,20 @@ RSS_FEEDS = [
     "https://www.peptidesciences.com/blog/feed/",
     "https://examine.com/feed/",
 ]
+
+# Celery beat schedule — interval (in seconds) per scraper.
+# These exact keys are referenced by celery_app.py beat_schedule;
+# renaming any of them will break the scheduler at startup.
+SCHEDULES = {
+    "reddit": 10800.0,         # every 3 hours
+    "google_trends": 21600.0,  # every 6 hours
+    "youtube": 21600.0,        # every 6 hours
+    "etsy": 86400.0,           # every 24 hours
+    "whop": 86400.0,           # every 24 hours
+    "bhw": 43200.0,            # every 12 hours
+    "rss_news": 3600.0,        # every hour
+    "web_search": 43200.0,     # every 12 hours
+}
+
+# Timezone for the Celery beat scheduler.
+BEAT_TIMEZONE = os.getenv("BEAT_TIMEZONE", "UTC")

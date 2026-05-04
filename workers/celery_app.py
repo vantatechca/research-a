@@ -1,6 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
-from config import REDIS_URL, SCHEDULES
+from config import REDIS_URL, SCHEDULES, BEAT_TIMEZONE
 
 app = Celery("peptidebrain", broker=REDIS_URL, backend=REDIS_URL)
 
