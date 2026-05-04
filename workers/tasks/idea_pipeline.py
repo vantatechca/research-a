@@ -202,6 +202,24 @@ def process_raw_content(self, content: str, source: str, source_links: list[dict
         priority_score = calculate_priority_score(idea, brain_alignment)
 
         # Step 6: Insert
+        # AI sometimes returns peptide_topics as a string ("BPC-157, GHK-Cu")
+        # instead of an array. Coerce defensively so Postgres doesn't reject.
+        raw_topics = idea.get("peptide_topics", [])
+        if isinstance(raw_topics, str):
+            # Split on common separators, drop empties
+            peptide_topics = [
+                t.strip() for t in raw_topics.replace(";", ",").split(",")
+                if t.strip()
+            ]
+        elif isinstance(raw_topics, list):
+            # Filter to strings only and strip whitespace
+            peptide_topics = [
+                str(t).strip() for t in raw_topics
+                if str(t).strip()
+            ]
+        else:
+            peptide_topics = []
+
         idea_data = {
             "title": title,
             "slug": slug,
@@ -209,7 +227,7 @@ def process_raw_content(self, content: str, source: str, source_links: list[dict
             "detailed_analysis": idea.get("evidence", ""),
             "category": idea.get("category", "ebook"),
             "subcategory": idea.get("subcategory"),
-            "peptide_topics": idea.get("peptide_topics", []),
+            "peptide_topics": peptide_topics,
             "priority_score": priority_score,
             "confidence_score": brain_alignment,
             "effort_to_build": idea.get("effort_to_build", "medium"),
