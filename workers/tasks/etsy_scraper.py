@@ -4,6 +4,7 @@ import time
 import httpx
 from celery_app import app
 from config import ETSY_QUERIES
+from utils.api_keys import get_api_key
 from utils.db import log_scrape
 from tasks.idea_pipeline import process_raw_content
 
@@ -23,7 +24,7 @@ def search_etsy(query: str, limit: int = 25) -> list[dict]:
                     "includes": "Images",
                 },
                 headers={
-                    "x-api-key": "your_etsy_key",  # Replaced by env
+                    "x-api-key": get_api_key("etsy") or "",
                     "User-Agent": "PeptideBrain/1.0",
                 },
             )

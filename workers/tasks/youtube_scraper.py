@@ -3,7 +3,8 @@ import time
 
 import httpx
 from celery_app import app
-from config import YOUTUBE_API_KEY, YOUTUBE_QUERIES
+from config import YOUTUBE_QUERIES
+from utils.api_keys import get_api_key
 from utils.db import log_scrape
 from tasks.idea_pipeline import process_raw_content
 
@@ -11,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def search_youtube_api(query: str, max_results: int = 10) -> list[dict]:
-    if not YOUTUBE_API_KEY:
+    api_key = get_api_key("youtube")
+    if not api_key:
         logger.warning("No YouTube API key configured")
         return []
 
@@ -27,7 +29,7 @@ def search_youtube_api(query: str, max_results: int = 10) -> list[dict]:
                     "maxResults": max_results,
                     "order": "date",
                     "publishedAfter": "2024-01-01T00:00:00Z",
-                    "key": YOUTUBE_API_KEY,
+                    "key": api_key,
                 },
             )
             search_resp.raise_for_status()
@@ -43,7 +45,7 @@ def search_youtube_api(query: str, max_results: int = 10) -> list[dict]:
                 params={
                     "part": "statistics,snippet,contentDetails",
                     "id": ",".join(video_ids),
-                    "key": YOUTUBE_API_KEY,
+                    "key": api_key,
                 },
             )
             stats_resp.raise_for_status()
@@ -101,8 +103,6 @@ def scrape_youtube(self):
         f"Tags: {', '.join(v['tags'][:5])}\nURL: {v['url']}"
         for v in unique_videos[:30]
     )
-
-    source_links = [{"url": v["url"], "title": v["title"], "sourceType": "youtube"} for v in unique_videos[:30]]
 
     source_links = [{"url": v["url"], "title": v["title"], "sourceType": "youtube"} for v in unique_videos[:30]]
 

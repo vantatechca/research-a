@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -182,7 +181,6 @@ function SourcesTab() {
         </div>
       )}
 
-      {/* Add Source Form */}
       {showAddForm && (
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -280,7 +278,6 @@ function SourcesTab() {
         </Card>
       )}
 
-      {/* Sources List */}
       {sources.length === 0 ? (
         <Card className="p-8">
           <div className="text-center">
@@ -497,7 +494,6 @@ function RulesTab() {
         </div>
       )}
 
-      {/* Add Rule Form */}
       {showAddForm && (
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -572,7 +568,6 @@ function RulesTab() {
         </Card>
       )}
 
-      {/* Edit Rule Dialog */}
       <Dialog open={!!editingRule} onOpenChange={(open) => !open && setEditingRule(null)}>
         <DialogContent>
           <DialogHeader>
@@ -628,11 +623,11 @@ function RulesTab() {
                   name="editRuleContent"
                   autoComplete="off"
                   value={editingRule.content}
-                    onChange={(e) =>
+                  onChange={(e) =>
                     setEditingRule({ ...editingRule, content: e.target.value })
-                   }
-                      rows={4}
-                      />
+                  }
+                  rows={4}
+                />
               </div>
             </div>
           )}
@@ -648,7 +643,6 @@ function RulesTab() {
         </DialogContent>
       </Dialog>
 
-      {/* Golden Rules */}
       {goldenRules.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -703,7 +697,6 @@ function RulesTab() {
         </div>
       )}
 
-      {/* General Rules */}
       {generalRules.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -752,7 +745,6 @@ function RulesTab() {
         </div>
       )}
 
-      {/* Other Memories */}
       {otherMemories.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
@@ -826,51 +818,256 @@ function RulesTab() {
 
 // ──────────────────────────── API Keys Tab ────────────────────────────
 
-interface ApiKeyField {
-  key: string;
+interface ProviderInfo {
+  id: string;
   label: string;
   envVar: string;
+  description: string;
   placeholder: string;
+  patternHint: string | null;
+  testable: boolean;
 }
 
-const API_KEY_FIELDS: ApiKeyField[] = [
-  { key: "anthropic", label: "Anthropic", envVar: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
-  { key: "openrouter", label: "OpenRouter", envVar: "OPENROUTER_API_KEY", placeholder: "sk-or-..." },
-  { key: "youtube", label: "YouTube Data API", envVar: "YOUTUBE_API_KEY", placeholder: "AIza..." },
-  { key: "serpapi", label: "SerpAPI", envVar: "SERPAPI_KEY", placeholder: "Enter SerpAPI key" },
-  { key: "etsy", label: "Etsy", envVar: "ETSY_API_KEY", placeholder: "Enter Etsy API key" },
-  { key: "embeddings", label: "Embeddings API", envVar: "EMBEDDINGS_API_KEY", placeholder: "Enter embeddings key" },
-];
+interface KeyStatus {
+  provider: string;
+  configured: boolean;
+  source: "db" | "env" | "missing";
+  preview: string;
+  updatedAt: string | null;
+}
+
+interface KeysListResponse {
+  providers: ProviderInfo[];
+  keys: KeyStatus[];
+  masterKeyConfigured: boolean;
+}
+
+type TestState =
+  | { status: "idle" }
+  | { status: "testing" }
+  | { status: "result"; ok: boolean; message: string };
 
 function ApiKeysTab() {
-  const [keys, setKeys] = useState<Record<string, string>>({});
-  const [visibleKeys, setVisibleKeys] = useState<Record<string, boolean>>({});
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, KeyStatus>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [visible, setVisible] = useState<Record<string, boolean>>({});
+  const [tests, setTests] = useState<Record<string, TestState>>({});
+  const [masterKeyConfigured, setMasterKeyConfigured] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
-  function maskKey(key: string): string {
-    if (!key || key.length < 8) return key ? "****" : "";
-    return key.slice(0, 4) + "..." + key.slice(-4);
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/api-keys");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as KeysListResponse;
+      setProviders(data.providers);
+      setStatuses(
+        Object.fromEntries(data.keys.map((k) => [k.provider, k]))
+      );
+      setMasterKeyConfigured(data.masterKeyConfigured);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load API keys");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function toggleVisibility(id: string) {
+    setVisible((p) => ({ ...p, [id]: !p[id] }));
   }
 
-  function toggleVisibility(field: string) {
-    setVisibleKeys((prev) => ({ ...prev, [field]: !prev[field] }));
+  function setDraft(id: string, value: string) {
+    setDrafts((p) => ({ ...p, [id]: value }));
+    setTests((p) => ({ ...p, [id]: { status: "idle" } }));
   }
 
-  function handleSave() {
-    // In a real app, this would POST to an API endpoint that securely stores keys
-    setSavedMessage("API keys configuration saved (updates require restart)");
-    setTimeout(() => setSavedMessage(null), 3000);
+  async function handleSaveOne(id: string) {
+    const value = drafts[id]?.trim();
+    if (!value) return;
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/api-keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys: [{ provider: id, value }] }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      setSavedMessage(`Saved ${id}`);
+      setTimeout(() => setSavedMessage(null), 3000);
+      setDrafts((p) => {
+        const next = { ...p };
+        delete next[id];
+        return next;
+      });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save key");
+    } finally {
+      setIsSaving(false);
+    }
   }
+
+  async function handleSaveAll() {
+    const entries = Object.entries(drafts)
+      .map(([provider, value]) => ({ provider, value: value.trim() }))
+      .filter((e) => e.value.length > 0);
+
+    if (entries.length === 0) {
+      setSavedMessage("No changes to save");
+      setTimeout(() => setSavedMessage(null), 2000);
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/api-keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys: entries }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      setSavedMessage(
+        `Saved ${entries.length} key${entries.length === 1 ? "" : "s"}`
+      );
+      setTimeout(() => setSavedMessage(null), 3000);
+      setDrafts({});
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save keys");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (
+      !confirm(
+        `Delete the saved key for ${id}? Env-var fallback (if any) will take over.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/settings/api-keys?provider=${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete key");
+    }
+  }
+
+  async function handleTest(id: string) {
+    const draftValue = drafts[id]?.trim();
+    setTests((p) => ({ ...p, [id]: { status: "testing" } }));
+    try {
+      const body: Record<string, string> = { provider: id };
+      if (draftValue && draftValue.length > 0) body.value = draftValue;
+
+      const res = await fetch("/api/settings/api-keys/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok) {
+        setTests((p) => ({
+          ...p,
+          [id]: {
+            status: "result",
+            ok: false,
+            message: data.error ?? `HTTP ${res.status}`,
+          },
+        }));
+        return;
+      }
+      setTests((p) => ({
+        ...p,
+        [id]: {
+          status: "result",
+          ok: data.ok ?? false,
+          message: data.message ?? "",
+        },
+      }));
+    } catch (e) {
+      setTests((p) => ({
+        ...p,
+        [id]: {
+          status: "result",
+          ok: false,
+          message: e instanceof Error ? e.message : "Network error",
+        },
+      }));
+    }
+  }
+
+  const dirtyCount = Object.values(drafts).filter(
+    (v) => v.trim().length > 0
+  ).length;
 
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold text-gray-900">API Keys</h3>
         <p className="text-xs text-gray-500 mt-0.5">
-          Configure API keys for external services. Keys are stored in your
-          environment configuration.
+          Keys are encrypted with AES-256-GCM and stored in the database.
+          Env-var fallback applies when no DB value is set.
         </p>
       </div>
+
+      {!masterKeyConfigured && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-medium">MASTER_ENCRYPTION_KEY is not set</div>
+            <div className="text-xs mt-1">
+              Saving keys is disabled. Generate a key with{" "}
+              <code className="font-mono bg-red-100 px-1 rounded">
+                node -e &quot;console.log(require(&apos;crypto&apos;).randomBytes(32).toString(&apos;hex&apos;))&quot;
+              </code>{" "}
+              and add it to the server env.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {savedMessage && (
         <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700">
@@ -878,59 +1075,186 @@ function ApiKeysTab() {
         </div>
       )}
 
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          {API_KEY_FIELDS.map((field) => (
-            <div key={field.key}>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-gray-700">
-                  {field.label}
-                </label>
-                <span className="text-[10px] text-gray-400 font-mono">
-                  {field.envVar}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`api-key-${field.key}`}
-                  name={field.key}
-                  autoComplete="off"
-                  type={visibleKeys[field.key] ? "text" : "password"}
-                  placeholder={field.placeholder}
-                  value={keys[field.key] ?? ""}
-                  onChange={(e) =>
-                    setKeys((prev) => ({
-                      ...prev,
-                      [field.key]: e.target.value,
-                    }))
-                  }
-                  className="font-mono text-xs"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => toggleVisibility(field.key)}
-                  className="shrink-0"
-                >
-                  {visibleKeys[field.key] ? (
-                    <EyeOff className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <Eye className="w-4 h-4 text-gray-400" />
-                  )}
-                </Button>
-              </div>
-              {field.key !== API_KEY_FIELDS[API_KEY_FIELDS.length - 1].key && (
-                <Separator className="mt-4" />
-              )}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="p-4 space-y-5">
+            {providers.map((field, idx) => {
+              const status = statuses[field.id];
+              const test = tests[field.id] ?? { status: "idle" };
+              const draft = drafts[field.id] ?? "";
+              const isDirty = draft.trim().length > 0;
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave}>
+              return (
+                <div key={field.id}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-gray-700">
+                      {field.label}
+                    </label>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {field.envVar}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mb-2">
+                    {field.description}
+                  </p>
+
+                  <div className="flex items-center gap-2 mb-2 text-[11px]">
+                    {status?.configured ? (
+                      <>
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium",
+                            status.source === "db"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-blue-100 text-blue-700"
+                          )}
+                        >
+                          {status.source === "db" ? "Saved" : "From env"}
+                        </span>
+                        <span className="font-mono text-gray-500">
+                          {status.preview}
+                        </span>
+                        {status.updatedAt && (
+                          <span className="text-gray-400">
+                            · {formatRelativeTime(status.updatedAt)}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+                        Not configured
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id={`api-key-${field.id}`}
+                      name={field.id}
+                      autoComplete="off"
+                      type={visible[field.id] ? "text" : "password"}
+                      placeholder={
+                        status?.configured
+                          ? "Enter a new key to replace"
+                          : field.placeholder
+                      }
+                      value={draft}
+                      onChange={(e) => setDraft(field.id, e.target.value)}
+                      className="font-mono text-xs"
+                      disabled={!masterKeyConfigured}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => toggleVisibility(field.id)}
+                      className="shrink-0"
+                      type="button"
+                    >
+                      {visible[field.id] ? (
+                        <EyeOff className="w-4 h-4 text-gray-400" />
+                      ) : (
+                        <Eye className="w-4 h-4 text-gray-400" />
+                      )}
+                    </Button>
+                    {field.testable && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleTest(field.id)}
+                        disabled={
+                          test.status === "testing" ||
+                          (!isDirty && !status?.configured)
+                        }
+                        type="button"
+                      >
+                        {test.status === "testing" ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          "Test"
+                        )}
+                      </Button>
+                    )}
+                    {isDirty && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleSaveOne(field.id)}
+                        disabled={!masterKeyConfigured || isSaving}
+                        type="button"
+                      >
+                        Save
+                      </Button>
+                    )}
+                    {status?.source === "db" && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(field.id)}
+                        className="shrink-0"
+                        type="button"
+                        title="Delete saved key"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-gray-400" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {field.patternHint && (
+                    <p className="text-[10px] text-gray-400 mt-1 font-mono">
+                      {field.patternHint}
+                    </p>
+                  )}
+
+                  {test.status === "result" && (
+                    <p
+                      className={cn(
+                        "text-[11px] mt-2",
+                        test.ok ? "text-green-600" : "text-red-600"
+                      )}
+                    >
+                      {test.ok ? "✓ " : "✗ "}
+                      {test.message}
+                    </p>
+                  )}
+
+                  {idx !== providers.length - 1 && (
+                    <Separator className="mt-4" />
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={load}
+          disabled={isLoading}
+          type="button"
+        >
+          <RefreshCw
+            className={cn("w-3.5 h-3.5 mr-1", isLoading && "animate-spin")}
+          />
+          Refresh
+        </Button>
+        <Button
+          onClick={handleSaveAll}
+          disabled={!masterKeyConfigured || isSaving || dirtyCount === 0}
+          type="button"
+        >
           <Save className="w-4 h-4 mr-1" />
-          Save API Keys
+          {isSaving
+            ? "Saving..."
+            : dirtyCount > 0
+              ? `Save ${dirtyCount} change${dirtyCount === 1 ? "" : "s"}`
+              : "Save API Keys"}
         </Button>
       </div>
     </div>

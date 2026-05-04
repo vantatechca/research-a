@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
   // Stream response from Claude
   let stream;
   try {
-    const client = getAnthropicClient();
+    const client = await getAnthropicClient();
     stream = await client.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 2048,

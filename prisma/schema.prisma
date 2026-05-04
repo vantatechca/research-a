@@ -155,3 +155,15 @@ model IdeaTag {
   @@id([ideaId, tagId])
   @@map("idea_tags")
 }
+
+model ApiKey {
+  // One row per provider. `provider` is the stable internal id from the
+  // provider registry (anthropic, openrouter, youtube, serp, etsy, embeddings).
+  // `encryptedValue` stores AES-256-GCM ciphertext: [12-byte IV][16-byte tag][payload].
+  provider       String   @id @db.VarChar(50)
+  encryptedValue String   @map("encrypted_value")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("api_keys")
+}

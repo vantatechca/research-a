@@ -3,7 +3,8 @@ import random
 
 import httpx
 from celery_app import app
-from config import SERP_API_KEY, SERP_API_PROVIDER, WEB_SEARCH_QUERIES
+from config import SERP_API_PROVIDER, WEB_SEARCH_QUERIES
+from utils.api_keys import get_api_key
 from utils.db import log_scrape
 from tasks.idea_pipeline import process_raw_content
 
@@ -11,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def search_serper(query: str, num_results: int = 10) -> list[dict]:
-    if not SERP_API_KEY:
+    api_key = get_api_key("serp")
+    if not api_key:
         logger.warning("No SERP API key configured")
         return []
 
@@ -20,7 +22,7 @@ def search_serper(query: str, num_results: int = 10) -> list[dict]:
             response = client.post(
                 "https://google.serper.dev/search",
                 headers={
-                    "X-API-KEY": SERP_API_KEY,
+                    "X-API-KEY": api_key,
                     "Content-Type": "application/json",
                 },
                 json={"q": query, "num": num_results},
@@ -43,7 +45,8 @@ def search_serper(query: str, num_results: int = 10) -> list[dict]:
 
 
 def search_serpapi(query: str, num_results: int = 10) -> list[dict]:
-    if not SERP_API_KEY:
+    api_key = get_api_key("serp")
+    if not api_key:
         return []
 
     try:
@@ -52,7 +55,7 @@ def search_serpapi(query: str, num_results: int = 10) -> list[dict]:
                 "https://serpapi.com/search",
                 params={
                     "q": query,
-                    "api_key": SERP_API_KEY,
+                    "api_key": api_key,
                     "num": num_results,
                     "engine": "google",
                 },
@@ -75,7 +78,8 @@ def search_serpapi(query: str, num_results: int = 10) -> list[dict]:
 
 
 def search_brave(query: str, num_results: int = 10) -> list[dict]:
-    if not SERP_API_KEY:
+    api_key = get_api_key("serp")
+    if not api_key:
         return []
 
     try:
@@ -85,7 +89,7 @@ def search_brave(query: str, num_results: int = 10) -> list[dict]:
                 params={"q": query, "count": num_results},
                 headers={
                     "Accept": "application/json",
-                    "X-Subscription-Token": SERP_API_KEY,
+                    "X-Subscription-Token": api_key,
                 },
             )
             response.raise_for_status()

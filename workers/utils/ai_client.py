@@ -2,13 +2,15 @@ import json
 import logging
 
 import httpx
-from config import OPENROUTER_API_KEY, OPENROUTER_MODEL
+from config import OPENROUTER_MODEL
+from utils.api_keys import get_api_key
 
 logger = logging.getLogger(__name__)
 
 
 async def call_cheap_model(prompt: str, system_prompt: str | None = None, temperature: float = 0.3) -> str:
-    if not OPENROUTER_API_KEY:
+    api_key = get_api_key("openrouter")
+    if not api_key:
         logger.warning("No OpenRouter API key configured, returning empty response")
         return ""
 
@@ -21,7 +23,7 @@ async def call_cheap_model(prompt: str, system_prompt: str | None = None, temper
         response = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
@@ -36,7 +38,8 @@ async def call_cheap_model(prompt: str, system_prompt: str | None = None, temper
 
 
 def call_cheap_model_sync(prompt: str, system_prompt: str | None = None, temperature: float = 0.3) -> str:
-    if not OPENROUTER_API_KEY:
+    api_key = get_api_key("openrouter")
+    if not api_key:
         logger.warning("No OpenRouter API key configured, returning empty response")
         return ""
 
@@ -49,7 +52,7 @@ def call_cheap_model_sync(prompt: str, system_prompt: str | None = None, tempera
         response = client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={

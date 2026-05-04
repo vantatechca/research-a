@@ -1,12 +1,14 @@
 import logging
 import httpx
-from config import EMBEDDINGS_API_KEY, EMBEDDINGS_API_URL, EMBEDDINGS_MODEL
+from config import EMBEDDINGS_API_URL, EMBEDDINGS_MODEL
+from utils.api_keys import get_api_key
 
 logger = logging.getLogger(__name__)
 
 
 def generate_embedding(text: str) -> list[float] | None:
-    if not EMBEDDINGS_API_KEY:
+    api_key = get_api_key("embeddings")
+    if not api_key:
         logger.warning("No embeddings API key configured")
         return None
 
@@ -15,7 +17,7 @@ def generate_embedding(text: str) -> list[float] | None:
             response = client.post(
                 f"{EMBEDDINGS_API_URL}/embeddings",
                 headers={
-                    "Authorization": f"Bearer {EMBEDDINGS_API_KEY}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
@@ -29,12 +31,3 @@ def generate_embedding(text: str) -> list[float] | None:
     except Exception as e:
         logger.error(f"Failed to generate embedding: {e}")
         return None
-
-
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot_product = sum(x * y for x, y in zip(a, b))
-    norm_a = sum(x * x for x in a) ** 0.5
-    norm_b = sum(x * x for x in b) ** 0.5
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return dot_product / (norm_a * norm_b)

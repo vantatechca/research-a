@@ -1,12 +1,24 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getApiKey } from "@/lib/api-keys/store";
 
 let anthropicClient: Anthropic | null = null;
+let anthropicClientKey: string | null = null;
 
-export function getAnthropicClient(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+/**
+ * Resolve the Anthropic key (DB-first, env fallback) and return a client.
+ * Re-builds the client if the active key has changed since the last call,
+ * so saving a new key in the UI takes effect within the cache TTL (60s).
+ */
+export async function getAnthropicClient(): Promise<Anthropic> {
+  const key = await getApiKey("anthropic");
+  if (!key) {
+    throw new Error(
+      "Anthropic API key not configured. Set it in /settings/api-keys."
+    );
+  }
+  if (!anthropicClient || anthropicClientKey !== key) {
+    anthropicClient = new Anthropic({ apiKey: key });
+    anthropicClientKey = key;
   }
   return anthropicClient;
 }
@@ -65,7 +77,12 @@ export async function callOpenRouter(
   prompt: string,
   systemPrompt?: string
 ): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = await getApiKey("openrouter");
+  if (!apiKey) {
+    throw new Error(
+      "OpenRouter API key not configured. Set it in /settings/api-keys."
+    );
+  }
   const model = process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat";
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
