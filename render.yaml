@@ -47,6 +47,12 @@ envVarGroups:
       - key: ETSY_API_KEY
         sync: false
 
+        # Shared token between Next.js and the workers FastAPI service.
+      # MUST be set with the same value on both peptidebrain-api and the
+      # Next.js service. Without it, /api/scrape/trigger returns 503.
+      - key: WORKER_API_TOKEN
+        sync: false
+
 services:
   # ─── 1. FastAPI — the trigger/status endpoint your Next.js UI calls ───
   - type: web
