@@ -50,7 +50,7 @@ export default function DashboardPage() {
     async function fetchIdeas() {
       try {
         const res = await fetch(
-          "/api/ideas?status=pending&sort=priority_score&limit=20"
+          "/api/ideas?status=pending&sort=discovered_at&limit=20"
         );
         if (res.ok) {
           const data = await res.json();
