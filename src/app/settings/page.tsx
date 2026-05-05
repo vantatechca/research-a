@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useFetchOnFocus } from "@/lib/hooks/use-fetch-on-focus";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import { TabsRoot, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -1264,26 +1265,16 @@ function ApiKeysTab() {
 // ──────────────────────────── Analytics Tab ────────────────────────────
 
 function AnalyticsTab() {
-  const [stats, setStats] = useState<PipelineStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const fetchStats = useCallback(
+    async (signal: AbortSignal): Promise<PipelineStats> => {
+      const res = await fetch("/api/stats", { cache: "no-store", signal });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return (await res.json()) as PipelineStats;
+    },
+    []
+  );
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        setIsLoading(true);
-        const res = await fetch("/api/stats");
-        if (!res.ok) throw new Error("Failed to fetch stats");
-        const data: PipelineStats = await res.json();
-        setStats(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load stats");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchStats();
-  }, []);
+  const { data: stats, loading: isLoading, error } = useFetchOnFocus(fetchStats);
 
   if (isLoading) {
     return (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useFetchOnFocus } from "@/lib/hooks/use-fetch-on-focus";
 import { cn, formatRelativeTime } from "@/lib/utils";
 import {
   Card,
@@ -92,11 +93,19 @@ function formatCategory(cat: string): string {
 }
 
 export default function TrendsPage() {
-  const [data, setData] = useState<TrendsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  const fetchTrends = useCallback(
+    async (signal: AbortSignal): Promise<TrendsData> => {
+      const res = await fetch("/api/trends", { cache: "no-store", signal });
+      if (!res.ok) throw new Error("Failed to fetch trends");
+      return (await res.json()) as TrendsData;
+    },
+    []
+  );
+
+  const { data, loading: isLoading, error } = useFetchOnFocus(fetchTrends);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -108,23 +117,6 @@ export default function TrendsPage() {
     });
     observer.observe(chartContainerRef.current);
     return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    async function fetchTrends() {
-      try {
-        setIsLoading(true);
-        const res = await fetch("/api/trends");
-        if (!res.ok) throw new Error("Failed to fetch trends");
-        const json: TrendsData = await res.json();
-        setData(json);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load trends");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    fetchTrends();
   }, []);
 
   if (isLoading) {

@@ -18,7 +18,7 @@ import {
   setApiKey,
 } from "@/lib/api-keys/store";
 
-// ─── GET /api/settings/api-keys ──────────────────────────────────────────────
+// ─── GET /api/settings/api-keys ────────────────────────────────────────────
 // Returns the configured status of every provider. Never returns full keys.
 
 export async function GET() {
@@ -46,7 +46,7 @@ export async function GET() {
   }
 }
 
-// ─── PUT /api/settings/api-keys ──────────────────────────────────────────────
+// ─── PUT /api/settings/api-keys ────────────────────────────────────────────
 // Upsert one or more keys. Body shape:
 //   { keys: [{ provider: "anthropic", value: "sk-ant-..." }, ...] }
 // Validates each key against its provider's pattern and minLength.
@@ -162,7 +162,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// ─── DELETE /api/settings/api-keys?provider=... ──────────────────────────────
+// ─── DELETE /api/settings/api-keys?provider=... ────────────────────────────
 
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);

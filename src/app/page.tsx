@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { AddIdeaDialog } from "@/components/dashboard/add-idea-dialog";
 import { StatCard } from "@/components/stat-card";
@@ -10,10 +10,6 @@ import { Button } from "@/components/ui/button";
 import type { IdeaCard as IdeaCardType, PipelineStats, BrainMemoryItem } from "@/types";
 import {
   Lightbulb,
-  Clock,
-  CheckCircle2,
-  Rocket,
-  Construction,
   TrendingUp,
   Brain,
   MessageCircle,
@@ -32,55 +28,59 @@ export default function DashboardPage() {
   const [loadingIdeas, setLoadingIdeas] = useState(true);
   const [loadingMemories, setLoadingMemories] = useState(true);
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const res = await fetch("/api/stats");
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch {
-        // failed to load stats
-      } finally {
-        setLoadingStats(false);
-      }
-    }
+  const refetchAll = useCallback(async () => {
+    // Don't toggle loading=true here — keeps the UI from flashing skeletons
+    // on every refocus. Only initial load shows skeletons.
+    try {
+      const [statsRes, ideasRes, memoriesRes] = await Promise.all([
+        fetch("/api/stats", { cache: "no-store" }),
+        fetch("/api/ideas?status=pending&sort=discovered_at&limit=20", {
+          cache: "no-store",
+        }),
+        fetch("/api/brain/memory?active=true", { cache: "no-store" }),
+      ]);
 
-    async function fetchIdeas() {
-      try {
-        const res = await fetch(
-          "/api/ideas?status=pending&sort=discovered_at&limit=20"
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setIdeas(data.ideas);
-        }
-      } catch {
-        // failed to load ideas
-      } finally {
-        setLoadingIdeas(false);
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data);
       }
-    }
-
-    async function fetchMemories() {
-      try {
-        const res = await fetch("/api/brain/memory?active=true");
-        if (res.ok) {
-          const data: BrainMemoryItem[] = await res.json();
-          setMemories(data.slice(0, 5));
-        }
-      } catch {
-        // failed to load memories
-      } finally {
-        setLoadingMemories(false);
+      if (ideasRes.ok) {
+        const data = await ideasRes.json();
+        setIdeas(data.ideas);
       }
+      if (memoriesRes.ok) {
+        const data: BrainMemoryItem[] = await memoriesRes.json();
+        setMemories(data.slice(0, 5));
+      }
+    } catch {
+      // network failure — keep last good state
+    } finally {
+      setLoadingStats(false);
+      setLoadingIdeas(false);
+      setLoadingMemories(false);
     }
-
-    fetchStats();
-    fetchIdeas();
-    fetchMemories();
   }, []);
+
+  useEffect(() => {
+    refetchAll();
+
+    function handleFocus() {
+      refetchAll();
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") refetchAll();
+    }
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    const intervalId = setInterval(refetchAll, 60_000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      clearInterval(intervalId);
+    };
+  }, [refetchAll]);
 
   function handleIdeaStatusChange(id: string, newStatus: string) {
     setIdeas((prev) =>
@@ -96,9 +96,11 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-1">Your peptide research command center</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Your peptide research command center
+          </p>
         </div>
-        <AddIdeaDialog onCreated={() => window.location.reload()} />
+        <AddIdeaDialog onCreated={refetchAll} />
       </div>
 
       {/* Stats row */}
@@ -276,7 +278,11 @@ export default function DashboardPage() {
                   <CardTitle className="text-sm">Recent Learnings</CardTitle>
                 </div>
                 <Link href="/brain">
-                  <Button variant="ghost" size="xs" className="text-xs text-gray-400">
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="text-xs text-gray-400"
+                  >
                     See all
                   </Button>
                 </Link>
@@ -355,7 +361,7 @@ export default function DashboardPage() {
                   className="w-full justify-start gap-2"
                 >
                   <Brain className="w-4 h-4 text-gray-400" />
-                  Open Brain Chat
+                  Brain Chat
                 </Button>
               </Link>
             </div>

@@ -138,7 +138,12 @@ export default function IdeasPage() {
           <h1 className="text-2xl font-bold text-gray-900">All Ideas</h1>
           <p className="text-sm text-gray-500 mt-1">Browse, filter, and manage your peptide product ideas</p>
         </div>
-        <AddIdeaDialog onCreated={() => window.location.reload()} />
+        <AddIdeaDialog
+          onCreated={() => {
+            fetchIdeas();
+            fetchCounts();
+          }}
+        />
       </div>
 
       {/* Toolbar: tabs + search + sort */}

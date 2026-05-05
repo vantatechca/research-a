@@ -40,7 +40,7 @@ function networkError(err: unknown): TestResult {
   return { ok: false, message: msg };
 }
 
-// ─── Per-provider testers ────────────────────────────────────────────────────
+// ─── Per-provider testers ──────────────────────────────────────────────────
 
 async function testAnthropic(key: string): Promise<TestResult> {
   // Smallest possible request: 1 token, haiku model.
@@ -187,7 +187,45 @@ async function testEmbeddings(key: string): Promise<TestResult> {
   }
 }
 
-// ─── Dispatcher ──────────────────────────────────────────────────────────────
+async function testEtsy(key: string): Promise<TestResult> {
+  // Etsy's openapi-ping endpoint validates the keystring without OAuth.
+  // Returns { application_id: <number> } on success, 401 on bad key.
+  // Reference: https://developers.etsy.com/documentation/reference#operation/ping
+  try {
+    const res = await timedFetch(
+      "https://openapi.etsy.com/v3/application/openapi-ping",
+      {
+        method: "GET",
+        headers: { "x-api-key": key },
+      }
+    );
+    if (res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        application_id?: number;
+      };
+      return {
+        ok: true,
+        message: body.application_id
+          ? `Etsy key valid (app ID ${body.application_id})`
+          : "Etsy key is valid",
+      };
+    }
+    if (res.status === 401)
+      return { ok: false, message: "Etsy rejected the key (401)" };
+    if (res.status === 403)
+      return { ok: false, message: "Etsy key lacks permissions (403)" };
+    if (res.status === 429)
+      return {
+        ok: false,
+        message: "Etsy rate-limited the test request (429) — try again",
+      };
+    return { ok: false, message: `Etsy returned HTTP ${res.status}` };
+  } catch (err) {
+    return networkError(err);
+  }
+}
+
+// ─── Dispatcher ────────────────────────────────────────────────────────────
 
 export async function testProviderKey(
   provider: ApiKeyProvider,
@@ -205,11 +243,7 @@ export async function testProviderKey(
     case "embeddings":
       return testEmbeddings(key);
     case "etsy":
-      // Marked testable=false in the registry, but defensive default.
-      return {
-        ok: false,
-        message: "Etsy keys can't be tested without OAuth",
-      };
+      return testEtsy(key);
     default:
       return { ok: false, message: `No tester for provider '${provider}'` };
   }

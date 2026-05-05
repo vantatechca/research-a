@@ -97,9 +97,12 @@ export const PROVIDERS: ProviderSpec[] = [
     label: "Etsy Open API",
     envVar: "ETSY_API_KEY",
     description: "Etsy product search for competitor data",
-    placeholder: "Enter Etsy API key",
+    placeholder: "Enter Etsy keystring",
     minLength: 16,
-    testable: false, // Etsy v3 needs OAuth dance; not worth testing here
+    // Etsy's openapi-ping endpoint validates the keystring without OAuth,
+    // so we CAN test these. (Older versions of this file said otherwise —
+    // that was wrong; OAuth is only needed for shop-scoped endpoints.)
+    testable: true,
   },
   {
     id: "embeddings",
