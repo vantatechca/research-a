@@ -17,10 +17,18 @@ import { toVectorLiteral } from "./client";
 
 /**
  * Cosine similarity threshold for marking an idea as a duplicate.
- * 0.95 = "nearly identical meaning", validated empirically with peptide
- * product titles. Tunable; if false positives are too high, raise to 0.96-0.97.
+ *
+ * Tuned to 0.90 based on real data from the Phase 2a backfill — short
+ * product titles cluster tighter than long-form text. Pairs we confirmed
+ * are real duplicates ("Peptide Stack Calculator" / "Peptide Stacking
+ * Calculator", "Peptide Safety Course" / "Peptide Safety & Education
+ * Course") score 0.905-0.92. Pairs in the 0.85-0.89 zone are usually
+ * "same niche, different angle" so we leave those alone.
+ *
+ * Raise to 0.92 if false positives appear; lower to 0.88 if we're missing
+ * obvious dupes.
  */
-export const DUPE_THRESHOLD = 0.95;
+export const DUPE_THRESHOLD = 0.9;
 
 export interface SimilarMatch {
   id: string;
