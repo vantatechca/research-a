@@ -56,6 +56,19 @@ model Idea {
   declineReason         String?   @map("decline_reason")
   approvalNotes         String?   @map("approval_notes")
 
+  // Semantic Dedup (Phase 2a)
+  // 1536-dim vector from text-embedding-3-small. Nullable so existing rows
+  // and rows from workers without embedding access still create.
+  embedding             Unsupported("vector(1536)")?
+  // If this idea is a near-duplicate of another, points to the original.
+  // ON DELETE SET NULL — deleting an original orphans its duplicates rather
+  // than cascade-deleting them.
+  duplicateOfId         String?   @map("duplicate_of_id") @db.Uuid
+  duplicateOf           Idea?     @relation("IdeaDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates            Idea[]    @relation("IdeaDuplicates")
+  // Counter on the ORIGINAL — how many duplicates point to it.
+  duplicateCount        Int       @default(0) @map("duplicate_count")
+
   // Timestamps
   discoveredAt          DateTime  @default(now()) @map("discovered_at")
   lastDataRefresh       DateTime? @map("last_data_refresh")
@@ -67,6 +80,7 @@ model Idea {
   tags                  IdeaTag[]
   conversations         Conversation[]
 
+  @@index([duplicateOfId])
   @@map("ideas")
 }
 
@@ -154,6 +168,7 @@ model IdeaTag {
 
   @@id([ideaId, tagId])
   @@map("idea_tags")
+
 }
 
 model ApiKey {
