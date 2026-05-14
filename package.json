@@ -14,7 +14,11 @@
     "setup": "bash scripts/setup.sh",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "sync:nicheiq": "tsx scripts/sync-nicheiq.ts",
+    "rotate": "tsx scripts/monthly-rotation.ts",
+    "seed:sites": "tsx scripts/seed-sites.ts",
+    "backfill:platform": "tsx scripts/backfill-platform.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

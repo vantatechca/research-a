@@ -182,3 +182,99 @@ model ApiKey {
 
   @@map("api_keys")
 }
+
+model DigitalOpportunity {
+  id            String   @id
+  title         String
+  score         Float
+  category      String
+  niche         String
+  platform      String
+  sourceUrl     String?
+  summary       String?
+  priceRange    String?
+  reviewCount   Int?
+  rawData       Json?
+  syncedAt      DateTime @default(now())
+  status        String   @default("QUEUED")
+  aiPlaybook    String?
+  usedInProduct String?
+
+  @@map("digital_opportunities")
+}
+
+model Site {
+  id        String    @id @default(uuid())
+  name      String
+  domain    String?
+  niche     String
+  platform  String    @default("etsy")
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  products  Product[]
+
+  @@map("sites")
+}
+
+model Product {
+  id            String        @id @default(uuid())
+  siteId        String
+  site          Site          @relation(fields: [siteId], references: [id])
+  title         String
+  description   String?
+  price         Float?
+  category      String
+  sourceOppId   String?
+  status        String        @default("BUILDING")
+  listedAt      DateTime?
+  removedAt     DateTime?
+  removalReason String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  performance   ProductPerformance[]
+
+  @@map("products")
+}
+
+model ProductPerformance {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  month     String
+  sales     Int      @default(0)
+  revenue   Float    @default(0)
+  views     Int      @default(0)
+  favorites Int      @default(0)
+
+  @@unique([productId, month])
+  @@map("product_performance")
+}
+
+model RotationCycle {
+  id           String          @id @default(uuid())
+  month        String
+  totalLive    Int
+  flaggedCount Int
+  addedCount   Int
+  ranAt        DateTime        @default(now())
+
+  entries      RotationEntry[]
+
+  @@unique([month])
+  @@map("rotation_cycles")
+}
+
+model RotationEntry {
+  id            String        @id @default(uuid())
+  cycleId       String
+  cycle         RotationCycle @relation(fields: [cycleId], references: [id])
+  siteId        String
+  action        String
+  productId     String?
+  opportunityId String?
+  reason        String?
+
+  @@map("rotation_entries")
+}
