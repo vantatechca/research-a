@@ -77,5 +77,11 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ inserted, skipped, niches: niches.length });
+  return NextResponse.json({ 
+  inserted, 
+  skipped, 
+  niches: niches.length,
+  sampleNiches: niches.slice(0, 10),
+  sampleNormalized: niches.slice(0, 10).map(n => n.toLowerCase().replace(/\s+/g, '_'))
+});
 }
