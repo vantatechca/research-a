@@ -17,12 +17,14 @@ function extractPlatform(rationale?: string | null): string | null {
 }
 
 async function fetchNiche(niche: string) {
-  const params = new URLSearchParams({ niche, minScore: MIN_SCORE, limit: "20" });
+  // Normalize: "ai prompt pack" → "ai_prompt_pack" to match nicheiq's format
+  const normalizedNiche = niche.toLowerCase().replace(/\s+/g, '_');
+  const params = new URLSearchParams({ niche: normalizedNiche, minScore: MIN_SCORE, limit: "20" });
   const res = await fetch(`${NICHEIQ_URL}/api/service/opportunities?${params}`, {
     headers: { Authorization: `Bearer ${NICHEIQ_KEY}` },
-    signal: AbortSignal.timeout(15_000),
+    signal:  AbortSignal.timeout(15_000),
   });
-  if (!res.ok) return [];
+  if (!res.ok) { console.warn(`  [${niche}] fetch failed: ${res.status}`); return []; }
   const { opportunities } = await res.json();
   return opportunities ?? [];
 }
