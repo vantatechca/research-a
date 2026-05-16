@@ -15,5 +15,5 @@ COPY . .
 # max-memory-per-child kills a worker that grows too large and respawns it
 CMD ["celery", "-A", "celery_app", "worker", \
      "--loglevel=info", \
-     "--concurrency=2", \
-     "--max-memory-per-child=200000"]
+     "--concurrency=1", \
+     "--max-memory-per-child=180000"]
