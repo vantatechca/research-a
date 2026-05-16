@@ -11,9 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# concurrency=2 + 200MB per child = safe on starter plan (512MB)
-# max-memory-per-child kills a worker that grows too large and respawns it
+# Solo pool = single process, no fork. Fits Starter plan's 512MB.
+# Tasks process serially but that's fine at our scrape volume.
 CMD ["celery", "-A", "celery_app", "worker", \
      "--loglevel=info", \
-     "--concurrency=1", \
-     "--max-memory-per-child=180000"]
+     "--pool=solo"]
