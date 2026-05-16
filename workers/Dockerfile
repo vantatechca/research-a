@@ -14,5 +14,6 @@ COPY . .
 # Solo pool = single process, no fork. Fits Starter plan's 512MB.
 # Tasks process serially but that's fine at our scrape volume.
 CMD ["celery", "-A", "celery_app", "worker", \
+     "-B", \
      "--loglevel=info", \
      "--pool=solo"]
