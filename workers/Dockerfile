@@ -11,4 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["celery", "-A", "celery_app", "worker", "--loglevel=info"]
+# concurrency=2 + 200MB per child = safe on starter plan (512MB)
+# max-memory-per-child kills a worker that grows too large and respawns it
+CMD ["celery", "-A", "celery_app", "worker", \
+     "--loglevel=info", \
+     "--concurrency=2", \
+     "--max-memory-per-child=200000"]
