@@ -1,11 +1,11 @@
-/**
+﻿/**
  * Auth middleware. Runs on every request that matches the `matcher` pattern
  * at the bottom of this file.
  *
  * Behaviour:
- *   - GET /login        → always allowed
- *   - POST /api/auth/*  → always allowed (login + logout endpoints)
- *   - everything else   → requires a valid session cookie
+ *   - GET /login        â†’ always allowed
+ *   - POST /api/auth/*  â†’ always allowed (login + logout endpoints)
+ *   - everything else   â†’ requires a valid session cookie
  *
  * Unauthenticated API requests get a 401 JSON response (so fetch callers can
  * detect it cleanly). Unauthenticated page loads get a 302 to /login with a
@@ -18,13 +18,12 @@ import {
   verifySession,
 } from "@/lib/auth/session";
 
-// Paths that bypass auth. Order matters — this list is short and read on
+// Paths that bypass auth. Order matters â€” this list is short and read on
 // every request.
 const PUBLIC_PATHS = [
   "/login",
   "/api/auth/login",
   "/api/auth/logout",
-  "/api/admin/sync-nicheiq",
 ];
 
 function isPublic(pathname: string): boolean {
@@ -51,7 +50,7 @@ export function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Unauthenticated. API → 401, page → redirect.
+  // Unauthenticated. API â†’ 401, page â†’ redirect.
   if (isApiPath(pathname)) {
     return NextResponse.json(
       { error: "Unauthorized", message: "Session expired or missing" },

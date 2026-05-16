@@ -11,20 +11,14 @@ import {
   Settings,
   Activity,
   LogOut,
-  Target,
-  Store,
-  Package,
 } from "lucide-react";
 
 const navItems = [
-  { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
-  { href: "/ideas",         label: "All Ideas",     icon: Lightbulb },
-  { href: "/opportunities", label: "Opportunities", icon: Target },
-  { href: "/sites",         label: "Sites",         icon: Store },
-  { href: "/products",      label: "Products",      icon: Package },
-  { href: "/brain",         label: "Brain Chat",    icon: Brain },
-  { href: "/trends",        label: "Trends",        icon: TrendingUp },
-  { href: "/settings",      label: "Settings",      icon: Settings },
+  { href: "/",         label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/ideas",    label: "All Ideas",  icon: Lightbulb },
+  { href: "/brain",    label: "Brain Chat", icon: Brain },
+  { href: "/trends",   label: "Trends",     icon: TrendingUp },
+  { href: "/settings", label: "Settings",   icon: Settings },
 ];
 
 export function Sidebar() {
