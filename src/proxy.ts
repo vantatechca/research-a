@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Auth middleware. Runs on every request that matches the `matcher` pattern
  * at the bottom of this file.
  *
