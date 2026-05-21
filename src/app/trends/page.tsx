@@ -93,8 +93,28 @@ function formatCategory(cat: string): string {
 }
 
 export default function TrendsPage() {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
+
+  // Callback ref: attaches the ResizeObserver the moment the chart node mounts.
+  // The chart container only exists *after* data loads (during loading we render
+  // a spinner instead), so a mount-only useEffect would run while the node is
+  // still null and never re-attach — leaving the chart stuck at 0x0 and never
+  // rendering. A callback ref fires whenever the node attaches/detaches.
+  const chartContainerRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) {
+        setChartSize({ width: Math.floor(width), height: Math.floor(height) });
+      }
+    });
+    observer.observe(node);
+    observerRef.current = observer;
+  }, []);
+
+  useEffect(() => () => observerRef.current?.disconnect(), []);
 
   const fetchTrends = useCallback(
     async (signal: AbortSignal): Promise<TrendsData> => {
@@ -106,18 +126,6 @@ export default function TrendsPage() {
   );
 
   const { data, loading: isLoading, error } = useFetchOnFocus(fetchTrends);
-
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) {
-        setChartSize({ width: Math.floor(width), height: Math.floor(height) });
-      }
-    });
-    observer.observe(chartContainerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   if (isLoading) {
     return (
