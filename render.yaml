@@ -1,10 +1,14 @@
 # render.yaml — peptide-brain workers Blueprint
 #
-# Deploys 4 resources:
+# Deploys 3 resources:
 #   1. peptidebrain-api          → FastAPI (/trigger, /status, /health)
-#   2. peptidebrain-worker       → Celery worker (runs scrapers)
-#   3. peptidebrain-beat         → Celery beat (scheduler, MUST be 1 instance)
-#   4. peptidebrain-redis        → Key Value (Valkey) broker + result backend
+#   2. peptidebrain-worker       → Celery worker WITH embedded beat (-B, solo pool)
+#   3. peptidebrain-redis        → Key Value (Valkey) broker + result backend
+#
+# NOTE: beat is no longer a separate service. The worker runs it in-process
+# via the `-B` flag baked into the Dockerfile CMD. The solo pool keeps the
+# worker inside the Starter plan's 512MB ceiling. Do NOT re-add a standalone
+# beat service AND keep `-B` — two schedulers = every scheduled task fires twice.
 #
 # ─────────────────────────────────────────────────────────────
 # BEFORE YOU DEPLOY — edit these:
@@ -14,8 +18,10 @@
 #
 # AFTER FIRST DEPLOY:
 #   • Render will prompt you for every `sync: false` env var in the dashboard.
-#     Paste your Neon DATABASE_URL and all API keys there — not in this file.
-#   • Add your frontend URL to CORS in api.py (currently only allows localhost:3000).
+#     Paste your Neon DATABASE_URL, MASTER_ENCRYPTION_KEY, and all API keys
+#     there — never commit them to this file.
+#   • Set FRONTEND_URL on peptidebrain-api to your deployed Next.js URL so prod
+#     browser requests pass CORS (api.py only allows localhost:3000 otherwise).
 # ─────────────────────────────────────────────────────────────
 
 envVarGroups:
@@ -25,11 +31,22 @@ envVarGroups:
       - key: DATABASE_URL
         sync: false
 
-      # AI
-      - key: OPENROUTER_API_KEY
+      # Decrypts the AES-256-GCM API keys stored in the `api_keys` table.
+      # REQUIRED — without it utils/api_keys.py cannot decrypt any provider
+      # key, so get_api_key("anthropic") returns None and the AI pipeline
+      # silently produces empty output. Hex (64 chars) or base64 (32 bytes).
+      - key: MASTER_ENCRYPTION_KEY
         sync: false
-      - key: OPENROUTER_MODEL
-        value: deepseek/deepseek-chat
+
+      # AI — Anthropic Claude (the bulk/cheap model; switched off OpenRouter).
+      # ANTHROPIC_API_KEY is the env fallback; the DB key_table takes priority
+      # when present (and MASTER_ENCRYPTION_KEY is set).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-haiku-4-5-20251001
+
+      # Embeddings — OpenAI-compatible endpoint for pgvector dedup (1536-dim).
       - key: EMBEDDINGS_API_KEY
         sync: false
       - key: EMBEDDINGS_API_URL
@@ -47,7 +64,7 @@ envVarGroups:
       - key: ETSY_API_KEY
         sync: false
 
-        # Shared token between Next.js and the workers FastAPI service.
+      # Shared token between Next.js and the workers FastAPI service.
       # MUST be set with the same value on both peptidebrain-api and the
       # Next.js service. Without it, /api/scrape/trigger returns 503.
       - key: WORKER_API_TOKEN
@@ -55,6 +72,7 @@ envVarGroups:
 
 services:
   # ─── 1. FastAPI — the trigger/status endpoint your Next.js UI calls ───
+  # The Dockerfile CMD is the worker command, so the API service overrides it.
   - type: web
     name: peptidebrain-api
     runtime: docker
@@ -66,22 +84,29 @@ services:
     healthCheckPath: /health
     envVars:
       - fromGroup: peptidebrain-shared
+      # CORS allow-list origin for the deployed Next.js frontend. Read by
+      # api.py — without it, only localhost:3000 is allowed in prod.
+      - key: FRONTEND_URL
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
           name: peptidebrain-redis
           property: connectionString
 
-  # ─── 2. Celery worker — runs the actual scrape tasks ───
+  # ─── 2. Celery worker + embedded beat — runs scrapes AND schedules them ───
+  # No dockerCommand here ON PURPOSE: the Dockerfile CMD is the single source
+  # of truth (`celery -A celery_app worker -B --loglevel=info --pool=solo`).
+  # Leaving it unset prevents this blueprint from drifting out of sync with
+  # the image again. Solo pool fits the 512MB Starter ceiling; -B embeds beat.
   - type: worker
     name: peptidebrain-worker
     runtime: docker
     repo: https://github.com/vantatechca/research-a
     rootDir: workers
     region: oregon
-    plan: starter                                       # bump to standard if queue backs up
-    # concurrency=2 keeps RAM safe on starter (512MB). Raise if scrapers are mostly I/O-bound.
-    dockerCommand: celery -A celery_app worker --loglevel=info --concurrency=2
+    plan: starter                                       # bump to standard if the queue backs up
+    numInstances: 1                                     # ⚠ keep at 1 — embedded beat means 2 instances = double-fired tasks
     envVars:
       - fromGroup: peptidebrain-shared
       - key: REDIS_URL
@@ -90,25 +115,7 @@ services:
           name: peptidebrain-redis
           property: connectionString
 
-  # ─── 3. Celery beat — the scheduler. DO NOT SCALE. ───
-  - type: worker
-    name: peptidebrain-beat
-    runtime: docker
-    repo: https://github.com/vantatechca/research-a
-    rootDir: workers
-    region: oregon
-    plan: starter
-    numInstances: 1    # ⚠ Two beat schedulers = every scheduled task fires twice. Keep at 1 forever.
-    dockerCommand: celery -A celery_app beat --loglevel=info
-    envVars:
-      - fromGroup: peptidebrain-shared
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: peptidebrain-redis
-          property: connectionString
-
-  # ─── 4. Key Value (Valkey / Redis-compatible) — Celery broker + result backend ───
+  # ─── 3. Key Value (Valkey / Redis-compatible) — Celery broker + result backend ───
   - type: keyvalue
     name: peptidebrain-redis
     region: oregon
