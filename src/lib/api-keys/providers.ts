@@ -15,7 +15,6 @@
 
 export type ApiKeyProvider =
   | "anthropic"
-  | "openrouter"
   | "youtube"
   | "serp"
   | "etsy"
@@ -32,7 +31,7 @@ export interface ProviderSpec {
   /**
    * Optional regex the key should match. If set, save endpoint rejects
    * keys that don't match. Tolerant by default — only enforce patterns
-   * we're sure of (Anthropic, OpenRouter, Google).
+   * we're sure of (Anthropic, Google).
    */
   pattern?: RegExp;
   /** Human-readable hint when pattern fails. */
@@ -51,21 +50,10 @@ export const PROVIDERS: ProviderSpec[] = [
     id: "anthropic",
     label: "Anthropic",
     envVar: "ANTHROPIC_API_KEY",
-    description: "Claude Sonnet 4 — powers the brain chat",
+    description: "Claude — powers both the brain chat and the worker pipeline",
     placeholder: "sk-ant-...",
     pattern: /^sk-ant-[A-Za-z0-9_-]{20,}$/,
     patternHint: "Anthropic keys start with 'sk-ant-'",
-    minLength: 30,
-    testable: true,
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    envVar: "OPENROUTER_API_KEY",
-    description: "Cheap LLM (DeepSeek) for bulk extraction in workers",
-    placeholder: "sk-or-...",
-    pattern: /^sk-or-[A-Za-z0-9_-]{20,}$/,
-    patternHint: "OpenRouter keys start with 'sk-or-'",
     minLength: 30,
     testable: true,
   },

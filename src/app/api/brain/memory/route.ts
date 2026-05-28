@@ -63,14 +63,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // `typeof NaN === "number"` is true, so a bare typeof check lets NaN
+    // through and Postgres rejects it at insert with a confusing 503. Same
+    // for ±Infinity. isFinite catches all of those and out-of-range values.
+    let importance = 0.5;
+    if (body.importance !== undefined) {
+      if (typeof body.importance !== "number" || !Number.isFinite(body.importance)) {
+        return NextResponse.json(
+          { error: "importance must be a finite number between 0 and 1" },
+          { status: 400 }
+        );
+      }
+      if (body.importance < 0 || body.importance > 1) {
+        return NextResponse.json(
+          { error: "importance must be between 0 and 1" },
+          { status: 400 }
+        );
+      }
+      importance = body.importance;
+    }
+
     const memory = await prisma.brainMemory.create({
       data: {
         memoryType: body.memoryType,
         content: body.content,
         source: typeof body.source === "string" ? body.source : "operator_note",
-        // Use `??` so an explicit 0 importance is preserved instead of being
-        // silently replaced by 0.5.
-        importance: typeof body.importance === "number" ? body.importance : 0.5,
+        importance,
         relatedIdeaIds: Array.isArray(body.relatedIdeaIds)
           ? (body.relatedIdeaIds as string[])
           : [],

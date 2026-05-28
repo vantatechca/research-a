@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # Provider id -> env var name. Mirrors src/lib/api-keys/providers.ts.
 PROVIDER_ENV_VARS = {
     "anthropic": "ANTHROPIC_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
     "youtube": "YOUTUBE_API_KEY",
     "serp": "SERP_API_KEY",
     "etsy": "ETSY_API_KEY",

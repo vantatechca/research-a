@@ -11,7 +11,6 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # (NOT the keys; those load from utils.api_keys which checks the DB first
 # then falls back to env). These constants stay here because they're plain
 # config, not secrets.
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat")
 EMBEDDINGS_API_URL = os.getenv("EMBEDDINGS_API_URL", "https://api.openai.com/v1")
 EMBEDDINGS_MODEL = os.getenv("EMBEDDINGS_MODEL", "text-embedding-3-small")
 
@@ -159,6 +158,3 @@ SCHEDULES = {
     "rss_news": 3600.0,        # every hour
     "web_search": 43200.0,     # every 12 hours
 }
-
-# Timezone for the Celery beat scheduler.
-BEAT_TIMEZONE = os.getenv("BEAT_TIMEZONE", "UTC")

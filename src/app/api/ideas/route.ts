@@ -3,12 +3,8 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
-import { generateEmbedding } from "@/lib/embeddings/client";
-import {
-  findSimilarIdea,
-  markAsDuplicate,
-  saveEmbedding,
-} from "@/lib/embeddings/dedup";
+import { generateEmbedding, toVectorLiteral } from "@/lib/embeddings/client";
+import { findSimilarIdea } from "@/lib/embeddings/dedup";
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
@@ -26,8 +22,11 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category");
     const sort = searchParams.get("sort") || "priority_score";
     const order = searchParams.get("order") || "desc";
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    // Clamp pagination. parseInt returns NaN on garbage, and NaN || 50 → 50,
+    // so the falsy fallback handles the bad-input case. Cap limit at 200 to
+    // protect Postgres + JSON serialization.
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10) || 50));
+    const offset = Math.max(0, parseInt(searchParams.get("offset") || "0", 10) || 0);
     const search = searchParams.get("search");
     // Phase 2a: by default, hide ideas marked as duplicates of others.
     // Pass ?includeDuplicates=true to see everything (used for debugging
@@ -39,12 +38,17 @@ export async function GET(req: NextRequest) {
     if (category) where.category = category;
     if (!includeDuplicates) where.duplicateOfId = null;
     if (search) {
+      // peptideTopics is a String[] in Postgres — `has` is case-sensitive
+      // exact match. Stored topics are mixed-case ("BPC-157", "GLP-1") so
+      // we send both the raw and lowercased needle through `hasSome` to
+      // catch either casing without normalizing at write time.
+      const topicCandidates = Array.from(new Set([search, search.toLowerCase(), search.toUpperCase()]));
       where.OR = [
         { title: { contains: search, mode: "insensitive" } },
         { summary: { contains: search, mode: "insensitive" } },
         { category: { contains: search, mode: "insensitive" } },
         { subcategory: { contains: search, mode: "insensitive" } },
-        { peptideTopics: { has: search.toLowerCase() } },
+        { peptideTopics: { hasSome: topicCandidates } },
       ];
     }
 
@@ -142,10 +146,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Phase 2a: generate embedding + check for duplicates ─────────────
-    // We compute the embedding BEFORE creating the row so we can decide
-    // whether to mark the new idea as a duplicate atomically. If embedding
-    // fails (e.g. provider down), we fall back to creating without one —
-    // the idea still goes in, just without dedup protection.
+    // We compute the embedding BEFORE the transaction so a slow embedding
+    // provider doesn't hold a DB transaction open. If embedding fails we
+    // fall back to inserting without one — the idea goes in, just without
+    // dedup protection on this row.
     const dedupText = `${data.title}\n\n${data.summary}`;
     let embedding: number[] | null = null;
     try {
@@ -157,7 +161,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find the closest existing idea in the same category, if any
     let duplicateMatch: { id: string; title: string; similarity: number } | null = null;
     if (embedding) {
       try {
@@ -170,47 +173,46 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create the idea (with duplicateOfId set if we found a match)
+    // Single transaction: create the idea (with duplicateOfId already set),
+    // store the embedding via raw SQL, and bump the canonical idea's counter
+    // in one atomic block. Previous behavior split these into three separate
+    // calls — partial failures left the embedding-missing or the counter
+    // out of sync with the dupe link.
     const idea = await withTimeout(
-      prisma.idea.create({
-        data: {
-          ...data,
-          duplicateOfId: duplicateMatch?.id ?? null,
-        } as Prisma.IdeaUncheckedCreateInput,
+      prisma.$transaction(async (tx) => {
+        const created = await tx.idea.create({
+          data: {
+            ...data,
+            duplicateOfId: duplicateMatch?.id ?? null,
+          } as Prisma.IdeaUncheckedCreateInput,
+        });
+
+        if (embedding) {
+          await tx.$executeRawUnsafe(
+            `UPDATE ideas SET embedding = $1::vector WHERE id = $2::uuid`,
+            toVectorLiteral(embedding),
+            created.id
+          );
+        }
+
+        if (duplicateMatch) {
+          await tx.idea.update({
+            where: { id: duplicateMatch.id },
+            data: { duplicateCount: { increment: 1 } },
+          });
+        }
+
+        return created;
       }),
       10_000,
-      "ideas.create"
+      "ideas.create+dedup"
     );
 
-    // Persist the embedding (raw SQL — Prisma can't bind vector type)
-    if (embedding) {
-      try {
-        await saveEmbedding(idea.id, embedding);
-      } catch (err) {
-        console.warn(
-          `[api/ideas] failed to save embedding for ${idea.id}:`,
-          err
-        );
-      }
-    }
-
-    // If we marked it as a duplicate, bump the original's counter
     if (duplicateMatch) {
-      try {
-        await markAsDuplicate({
-          newIdeaId: idea.id,
-          originalId: duplicateMatch.id,
-        });
-        console.log(
-          `[api/ideas] new idea ${idea.id} marked duplicate of ${duplicateMatch.id} ` +
-            `(similarity ${duplicateMatch.similarity.toFixed(3)})`
-        );
-      } catch (err) {
-        console.warn(
-          `[api/ideas] failed to bump duplicate counter on ${duplicateMatch.id}:`,
-          err
-        );
-      }
+      console.log(
+        `[api/ideas] new idea ${idea.id} marked duplicate of ${duplicateMatch.id} ` +
+          `(similarity ${duplicateMatch.similarity.toFixed(3)})`
+      );
     }
 
     return NextResponse.json(

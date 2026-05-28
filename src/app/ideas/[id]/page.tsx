@@ -298,8 +298,8 @@ export default function IdeaDetailPage() {
   }
 
   const confidencePercent = idea.confidenceScore > 1
-    ? Math.round(idea.confidenceScore)
-    : Math.round(idea.confidenceScore * 100);
+  ? Math.round(idea.confidenceScore)
+  : Math.round(idea.confidenceScore * 100);
 
   return (
     <div className="pb-24">

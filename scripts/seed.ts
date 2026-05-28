@@ -47,7 +47,7 @@ const SEED_IDEAS = [
   {
     title: "GLP-1 Agonist Complete Guide",
     slug: "glp1-agonist-complete-guide",
-    summary: "Deep dive into semaglutide, tirzepatide, and retatrutide â€” dosing protocols, side effect management, diet optimization, and progress tracking.",
+    summary: "Deep dive into semaglutide, tirzepatide, and retatrutide — dosing protocols, side effect management, diet optimization, and progress tracking.",
     category: "ebook",
     subcategory: "GLP-1",
     peptideTopics: ["semaglutide", "tirzepatide", "retatrutide", "GLP-1"],
@@ -85,7 +85,7 @@ const SEED_IDEAS = [
   {
     title: "Peptide Dosing Calculator",
     slug: "peptide-dosing-calculator",
-    summary: "Interactive web tool for reconstitution math and dose tracking. Input vial size, BAC water volume, desired dose â€” get exact units to draw.",
+    summary: "Interactive web tool for reconstitution math and dose tracking. Input vial size, BAC water volume, desired dose — get exact units to draw.",
     category: "calculator",
     subcategory: "dosing",
     peptideTopics: ["reconstitution", "dosing", "general"],
@@ -290,7 +290,7 @@ const SEED_IDEAS = [
   {
     title: "Cosmetic Peptide Skincare Guide",
     slug: "cosmetic-peptide-skincare-guide",
-    summary: "Guide to topical peptides for skincare â€” GHK-Cu, copper peptides, argireline. DIY formulation recipes and product recommendations.",
+    summary: "Guide to topical peptides for skincare — GHK-Cu, copper peptides, argireline. DIY formulation recipes and product recommendations.",
     category: "ebook",
     subcategory: "skincare",
     peptideTopics: ["GHK-Cu", "cosmetic peptides"],
@@ -313,11 +313,11 @@ const GOLDEN_RULES = [
 ];
 
 const GENERAL_RULES = [
-  "Prefer ebooks and calculators for quick wins â€” low effort, fast to market",
+  "Prefer ebooks and calculators for quick wins — low effort, fast to market",
   "GLP-1 content (semaglutide, tirzepatide) has the highest search volume right now",
   "Visual/video-enhanced products tend to command higher prices than text-only",
   "Compound-specific content preferred over generic peptide content",
-  "Always check Etsy competitor count â€” >30 similar products means saturated unless differentiation is clear",
+  "Always check Etsy competitor count — >30 similar products means saturated unless differentiation is clear",
 ];
 
 const MONITORED_SOURCES = [
@@ -433,4 +433,3 @@ main()
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());
-

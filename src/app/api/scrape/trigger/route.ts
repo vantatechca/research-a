@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { errorResponse, parseJsonBody } from "@/lib/api";
+import { checkRateLimit, identifyClient } from "@/lib/rate-limit";
 
 // Mirror the source allow-list from workers/api.py so we reject bad sources
 // at the edge instead of round-tripping to FastAPI just to get a 400 back.
@@ -18,7 +19,31 @@ const VALID_SOURCES = new Set([
 
 const TRIGGER_TIMEOUT_MS = 10_000;
 
+// Each trigger fires a scraping task — relatively cheap individually but
+// the worker is on the Starter plan and the queue can back up. 20 triggers
+// per 5 minutes lets an operator manually kick all 8 scrapers a couple of
+// times each without locking out.
+const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const RATE_LIMIT_MAX_HITS = 20;
+
 export async function POST(req: NextRequest) {
+  const gate = checkRateLimit("scrape-trigger", identifyClient(req), {
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    maxHits: RATE_LIMIT_MAX_HITS,
+  });
+  if (!gate.allowed) {
+    return NextResponse.json(
+      {
+        error: "Too many trigger requests. Slow down.",
+        retryAfterSec: gate.retryAfterSec,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(gate.retryAfterSec) },
+      }
+    );
+  }
+
   const parsed = await parseJsonBody(req);
   if (!parsed.ok) return parsed.response;
 

@@ -1,11 +1,10 @@
 import json
 import logging
-import hashlib
 import re
 
 from celery_app import app
 from utils.ai_client import call_cheap_model_sync, extract_json_from_response
-from utils.db import insert_idea, check_duplicate_slug, get_brain_memories
+from utils.db import insert_idea, check_duplicate_slug, find_similar_idea, get_brain_memories
 from utils.embeddings import generate_embedding
 
 logger = logging.getLogger(__name__)
@@ -153,8 +152,8 @@ def calculate_priority_score(idea: dict, brain_alignment: float) -> float:
     return round(min(100, max(0, score)), 1)
 
 
-@app.task(name="tasks.idea_pipeline.process_raw_content", bind=True, max_retries=2)
-def process_raw_content(self, content: str, source: str, source_links: list[dict] | None = None, metadata: dict | None = None):
+@app.task(name="tasks.idea_pipeline.process_raw_content")
+def process_raw_content(content: str, source: str, source_links: list[dict] | None = None, metadata: dict | None = None):
     """Central pipeline: raw content -> dedup -> relevance -> extract -> score -> insert."""
     logger.info(f"Processing raw content from {source} ({len(content)} chars)")
 
@@ -243,7 +242,31 @@ def process_raw_content(self, content: str, source: str, source_links: list[dict
         }
 
         try:
-            idea_id = insert_idea(idea_data)
+            # Phase 2a parity with frontend: build an embedding and check for
+            # near-duplicates in the same category before inserting. Best-
+            # effort — if embeddings are misconfigured the idea still goes in
+            # with embedding=None and slug-only dedup, matching prior behavior.
+            embedding = None
+            duplicate_of_id = None
+            try:
+                dedup_text = f"{title}\n\n{idea_data['summary']}"
+                embedding = generate_embedding(dedup_text)
+            except Exception as e:
+                logger.warning(f"Embedding generation failed for '{title}': {e}")
+
+            if embedding is not None:
+                try:
+                    match = find_similar_idea(embedding, idea_data["category"])
+                    if match:
+                        duplicate_of_id = match["id"]
+                        logger.info(
+                            f"Idea '{title}' marked duplicate of {match['id']} "
+                            f"(similarity {match['similarity']:.3f})"
+                        )
+                except Exception as e:
+                    logger.warning(f"Dedup query failed for '{title}': {e}")
+
+            idea_id = insert_idea(idea_data, embedding=embedding, duplicate_of_id=duplicate_of_id)
             if idea_id is None:
                 # Race: another worker inserted the same slug between dedup
                 # check and insert. Skip silently.

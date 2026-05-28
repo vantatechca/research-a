@@ -2,7 +2,8 @@
 AI client for the peptide-brain pipeline.
 
 Uses Anthropic Claude Haiku 4.5 via the api_keys DB lookup (provider='anthropic').
-Switched from OpenRouter to avoid the credit top-up cycle.
+This is the bulk/cheap path for the worker; the operator-facing brain chat
+uses a stronger model (see src/app/api/brain/chat/route.ts, env BRAIN_MODEL).
 """
 import json
 import logging

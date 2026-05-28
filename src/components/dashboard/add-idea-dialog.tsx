@@ -90,7 +90,11 @@ export function AddIdeaDialog({ onCreated, className }: AddIdeaDialogProps) {
           peptideTopics: topics,
           status: "pending",
           priorityScore: 50,
-          confidenceScore: 0.5,
+          // Pipeline writes confidenceScore on a 0-100 scale (workers/tasks/
+          // idea_pipeline.check_brain_alignment clamps to [0, 100], default
+          // neutral = 50). Match that here — sending 0.5 would render the
+          // dashboard "0.5" next to "82" and look broken.
+          confidenceScore: 50,
           effortToBuild,
           estimatedPriceRange: estimatedPriceRange.trim() || undefined,
           discoverySource: "manual",

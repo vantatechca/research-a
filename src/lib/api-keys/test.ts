@@ -70,22 +70,6 @@ async function testAnthropic(key: string): Promise<TestResult> {
   }
 }
 
-async function testOpenRouter(key: string): Promise<TestResult> {
-  // GET /api/v1/models is auth-required and cheap.
-  try {
-    const res = await timedFetch("https://openrouter.ai/api/v1/models", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${key}` },
-    });
-    if (res.ok) return { ok: true, message: "OpenRouter key is valid" };
-    if (res.status === 401)
-      return { ok: false, message: "OpenRouter rejected the key (401)" };
-    return { ok: false, message: `OpenRouter returned HTTP ${res.status}` };
-  } catch (err) {
-    return networkError(err);
-  }
-}
-
 async function testYouTube(key: string): Promise<TestResult> {
   // videos.list with a known video ID. Cheapest possible API call.
   // "dQw4w9WgXcQ" is permanent and public.
@@ -234,8 +218,6 @@ export async function testProviderKey(
   switch (provider) {
     case "anthropic":
       return testAnthropic(key);
-    case "openrouter":
-      return testOpenRouter(key);
     case "youtube":
       return testYouTube(key);
     case "serp":

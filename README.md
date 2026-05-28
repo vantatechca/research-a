@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# peptide-brain (research-a)
 
-## Getting Started
+AI-powered idea-discovery pipeline for the peptide e-commerce niche. Surfaces
+digital-product ideas (ebooks, calculators, courses, templates, etc.) targeted
+at peptide store customers, scored against operator preferences stored in a
+"brain memory" table.
 
-First, run the development server:
+**Read [`AGENTS.md`](./AGENTS.md) before making changes** — it documents the
+project scope, the hard line between peptide-brain and nicheiq, and which
+concepts must NOT cross over.
+
+## Stack
+
+| Layer        | Tech |
+|--------------|------|
+| Frontend     | Next.js 16, React 19, Tailwind v4, shadcn/ui |
+| Database     | Postgres (Neon) + pgvector for semantic dedup |
+| ORM          | Prisma 7 with `adapter-pg` |
+| Workers      | Python 3.12, Celery 5.4 + Redis (Render Valkey) |
+| AI — chat    | Anthropic Claude Sonnet 4.6 (default; override via `BRAIN_MODEL`) |
+| AI — bulk    | Anthropic Claude Haiku 4.5 (override via `CLAUDE_MODEL`) |
+| Embeddings   | OpenAI `text-embedding-3-small` (1536-dim, via OpenAI-compatible endpoint) |
+| Deployment   | Render — `peptidebrain-api`, `peptidebrain-worker`, `peptidebrain-redis` |
+
+## Local development
 
 ```bash
+# 1. Set up env
+cp .env.example .env.local
+#    Fill in DATABASE_URL, DIRECT_URL, MASTER_ENCRYPTION_KEY,
+#    AUTH_SESSION_SECRET, AUTH_PASSWORD, WORKER_API_TOKEN, ANTHROPIC_API_KEY.
+#    Generate the secret values with:
+#      node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 2. Bring up DB + Redis + workers
+docker compose up -d
+
+# 3. Generate Prisma client and push schema
+npm install
+npm run db:generate
+npm run db:push
+
+# 4. (Optional) seed with example ideas
+npm run seed
+
+# 5. Run the Next.js dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app listens on http://localhost:3000 — log in with `AUTH_PASSWORD`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+prisma/         schema.prisma — Idea, BrainMemory, Conversation, Message, etc.
+src/app/        Next.js routes (UI + /api/*)
+src/lib/        shared libs — db, ai, embeddings, api-keys, auth
+src/components/ React components (shadcn UI + app-specific)
+workers/        Python — Celery tasks, FastAPI trigger endpoint, pgvector dedup
+scripts/        seed + one-off migration helpers
+```
 
-## Learn More
+## Where to look first when something breaks
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **AI pipeline produces nothing** → `workers/utils/ai_client.py` (Anthropic
+  key resolution), and `workers/tasks/idea_pipeline.py` (relevance →
+  extraction → embedding → dedup → insert).
+- **Brain chat fails or hangs** → `src/app/api/brain/chat/route.ts`.
+- **API key UI shows "missing"** → `MASTER_ENCRYPTION_KEY` is wrong or
+  unset; old encrypted rows become undecryptable.
+- **`prisma generate` / `prisma db push` fail on a fresh clone** →
+  `DIRECT_URL` is unset; see `.env.example`.

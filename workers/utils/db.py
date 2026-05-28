@@ -23,12 +23,54 @@ def get_connection():
         conn.close()
 
 
-def insert_idea(idea_data: dict) -> str | None:
-    """Insert an idea row.
+# Cosine similarity threshold for marking an idea as a duplicate. Kept in
+# sync with src/lib/embeddings/dedup.ts DUPE_THRESHOLD — tune both together.
+DUPE_THRESHOLD = 0.90
+
+
+def _embedding_literal(embedding: list[float]) -> str:
+    """Format a vector as the pgvector literal '[0.1,0.2,...]'."""
+    return "[" + ",".join(repr(float(x)) for x in embedding) + "]"
+
+
+def find_similar_idea(embedding: list[float], category: str) -> dict | None:
+    """Find the most semantically similar canonical idea in the same category.
+
+    Returns {id, title, similarity} when something crosses DUPE_THRESHOLD, else
+    None. Mirrors src/lib/embeddings/dedup.ts findSimilarIdea so frontend and
+    worker dedup decisions agree.
+    """
+    vec = _embedding_literal(embedding)
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id::text AS id, title,
+                       1 - (embedding <=> %s::vector) AS similarity
+                FROM ideas
+                WHERE embedding IS NOT NULL
+                  AND category = %s
+                  AND duplicate_of_id IS NULL
+                ORDER BY embedding <=> %s::vector
+                LIMIT 1
+                """,
+                (vec, category, vec),
+            )
+            row = cur.fetchone()
+    if not row:
+        return None
+    if row["similarity"] < DUPE_THRESHOLD:
+        return None
+    return {"id": row["id"], "title": row["title"], "similarity": float(row["similarity"])}
+
+
+def insert_idea(idea_data: dict, embedding: list[float] | None = None, duplicate_of_id: str | None = None) -> str | None:
+    """Insert an idea row, optionally with an embedding + duplicate link.
 
     Returns the new UUID on success, or None when the row was skipped due to a
-    slug conflict (ON CONFLICT DO NOTHING). Previously returned a fresh UUID
-    even on conflict, making callers think an insert happened when it hadn't.
+    slug conflict (ON CONFLICT DO NOTHING). The embedding column and the
+    counter on the canonical idea are updated in the same transaction, so
+    either the full dedup state lands or none of it does.
     """
     idea_id = str(uuid.uuid4())
     with get_connection() as conn:
@@ -46,7 +88,8 @@ def insert_idea(idea_data: dict) -> str | None:
                     existing_products, competitor_analysis, differentiation_notes,
                     estimated_price_range, estimated_monthly_revenue,
                     effort_to_build, time_to_build,
-                    source_links, discovery_source
+                    source_links, discovery_source,
+                    duplicate_of_id
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s,
@@ -58,7 +101,8 @@ def insert_idea(idea_data: dict) -> str | None:
                     %s, %s, %s,
                     %s, %s,
                     %s, %s,
-                    %s, %s
+                    %s, %s,
+                    %s
                 )
                 ON CONFLICT (slug) DO NOTHING
                 RETURNING id
@@ -96,10 +140,31 @@ def insert_idea(idea_data: dict) -> str | None:
                     idea_data.get("time_to_build"),
                     json.dumps(idea_data.get("source_links", [])),
                     idea_data.get("discovery_source"),
+                    duplicate_of_id,
                 ),
             )
             result = cur.fetchone()
-            return result[0] if result else None
+            if not result:
+                return None
+            new_id = result[0]
+
+            # Store the embedding via raw SQL because pgvector's column type
+            # can't be parameterized through the normal driver path.
+            if embedding is not None:
+                cur.execute(
+                    "UPDATE ideas SET embedding = %s::vector WHERE id = %s",
+                    (_embedding_literal(embedding), new_id),
+                )
+
+            # Bump the canonical idea's duplicate counter atomically with
+            # the insert above — both land or neither does.
+            if duplicate_of_id is not None:
+                cur.execute(
+                    "UPDATE ideas SET duplicate_count = duplicate_count + 1 WHERE id = %s::uuid",
+                    (duplicate_of_id,),
+                )
+
+            return new_id
 
 
 def log_scrape(source: str, query: str | None, results_count: int, ideas_generated: int, status: str = "completed", error_message: str | None = None):
